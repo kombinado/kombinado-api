@@ -416,3 +416,15 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+
+
+# =========================
+# JetBrains Rider
+# =========================
+
+# Ignora a pasta principal de configurações locais da IDE
+.idea/
+
+# Ignora arquivos de módulo do Rider gerados automaticamente
+*.sln.iml
