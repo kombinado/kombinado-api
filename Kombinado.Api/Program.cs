@@ -1,4 +1,14 @@
+
+using Kombinado.Api.Data;
+using Microsoft.EntityFrameworkCore;
+
+DotNetEnv.Env.Load(Path.Combine(Directory.GetCurrentDirectory(), "..", ".env"));
+
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+// Entity Framework Core configuration
+string? connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING");
+builder.Services.AddDbContext<KombinadoDbContext>(o => o.UseNpgsql(connectionString));
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
