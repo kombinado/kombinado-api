@@ -13,6 +13,8 @@ builder.Services.AddDbContext<KombinadoDbContext>(o => o.UseNpgsql(connectionStr
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddControllers();
+
 WebApplication app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -26,5 +28,8 @@ app.UseHttpsRedirection();
 
 // Create a root endpoint
 app.Map("/", () => "Welcome to Kombinado API!");
+
+// Map controllers
+app.MapControllers();
 
 app.Run();
