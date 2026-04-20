@@ -1,5 +1,6 @@
 using Kombinado.Api.Data;
 using Kombinado.Api.Services.Auth;
+using Kombinado.Api.Services.Token;
 using Microsoft.EntityFrameworkCore;
 
 DotNetEnv.Env.Load(Path.Combine(Directory.GetCurrentDirectory(), "..", ".env"));
@@ -10,7 +11,9 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 string? connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING");
 builder.Services.AddDbContext<KombinadoDbContext>(o => o.UseNpgsql(connectionString));
 
+// Dependency Injection for services
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ITokenService, TokenService>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
