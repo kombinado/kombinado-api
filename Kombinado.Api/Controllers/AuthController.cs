@@ -25,5 +25,17 @@ namespace Kombinado.Api.Controllers
 
             return Ok(response);
         }
+
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
+        {
+            var response = await _authService.LoginAsync(request);
+            if (!response.Success)
+            {
+                return StatusCode(response.StatusCode, response);
+            }
+
+            return Ok(response);
+        }
     }
 }
