@@ -1,4 +1,5 @@
 ﻿using Kombinado.Api.Models.DTOs.Requests;
+using Kombinado.Api.Services.Auth;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Kombinado.Api.Controllers
@@ -7,10 +8,22 @@ namespace Kombinado.Api.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
-        [HttpPost("signup")]
-        public IActionResult Signup([FromBody] SignupRequestDto request)
+        private readonly IAuthService _authService;
+        public AuthController(IAuthService authService)
         {
-            return Ok("Por enquanto ainda não tem, mas ta chegando rapaze!");
+            _authService = authService;
+        }
+
+        [HttpPost("signup")]
+        public async Task<IActionResult> Signup([FromBody] SignupRequestDto request)
+        {
+            var response = await _authService.SignupAsync(request);
+            if (!response.Success)
+            {
+                return StatusCode(response.StatusCode, response);
+            }
+
+            return Ok(response);
         }
     }
 }
