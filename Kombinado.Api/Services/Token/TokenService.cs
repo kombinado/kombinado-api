@@ -79,6 +79,8 @@ namespace Kombinado.Api.Services.Token
             };
 
             JwtSecurityTokenHandler tokenHandler = new JwtSecurityTokenHandler();
+            tokenHandler.InboundClaimTypeMap.Clear();
+
             ClaimsPrincipal principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken securityToken);
 
             // Check if the token is a JWT and if it uses the expected signing algorithm
