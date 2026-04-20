@@ -23,13 +23,24 @@ namespace Kombinado.Api.Services.Auth
                 return ApiResponse<string>.FailureResponse("É necessário um e-mail institucional do IFTM (@estudante.iftm.edu.br).", 400);
             }
 
-            // 2. Check if email is already registered
+            // 2. If user is a driver, check if vehicle info is provided
+            if (request.IsDriver)
+            {
+                if (string.IsNullOrWhiteSpace(request.VehicleModel) ||
+                    string.IsNullOrWhiteSpace(request.VehicleColor) ||
+                    string.IsNullOrWhiteSpace(request.VehiclePlate))
+                {
+                    return ApiResponse<string>.FailureResponse("Motoristas precisam informar o Modelo, Cor e Placa do veículo.", 400);
+                }
+            }
+
+            // 3. Check if email is already registered
             if (await _dbContext.Users.AnyAsync(u => u.Email == request.Email))
             {
                 return ApiResponse<string>.FailureResponse("Este e-mail já está cadastrado.", 400);
             }
 
-            // 3. Create new user
+            // 4. Create new user
             UserEntity user = new UserEntity
             {
                 Id = Guid.NewGuid(),
