@@ -1,11 +1,14 @@
 ﻿using Kombinado.Api.Data;
 using Kombinado.Api.Models;
+using Kombinado.Api.Models.DTOs;
 using Kombinado.Api.Models.DTOs.Requests;
 using Kombinado.Api.Models.DTOs.Responses;
 using Kombinado.Api.Models.Entities;
 using Kombinado.Api.Services.Token;
 using Kombinado.Api.Utils;
 using Microsoft.EntityFrameworkCore;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace Kombinado.Api.Services.Auth
 {
@@ -118,6 +121,57 @@ namespace Kombinado.Api.Services.Auth
             };
 
             return ApiResponse<LoginResponseDto>.SuccessResponse("Login realizado com sucesso!", responseData);
+        }
+
+        public async Task<ApiResponse<LoginResponseDto>> RefreshTokenAsync(RefreshTokenRequestDto request)
+        {
+            // 1. Get claims from the expired access token
+            ClaimsPrincipal principal = _tokenService.GetPrincipalFromExpiredToken(request.AccessToken);
+
+            // Get the email claim
+            string? email = principal.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Email)?.Value;
+            if (string.IsNullOrEmpty(email))
+            {
+                return ApiResponse<LoginResponseDto>.FailureResponse("Token inválido.", 400);
+            }
+
+            // 2. Get user by email (if exists)
+            UserEntity? user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+            // 3. Maximum Security Validation (Rotation)
+            // - Does the user exist?
+            // - Does the sent Refresh Token match exactly with the one in the database?
+            // - Is the Refresh Token still within the validity period (e.g., 7 days)?
+            if (user == null ||
+                user.RefreshToken != request.RefreshToken ||
+                user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+            {
+                return ApiResponse<LoginResponseDto>.FailureResponse("Sessão expirada. Por favor, faça login novamente.", 401);
+            }
+
+            // 4. Refresh Tokens (Rotation)
+            string newAccessToken = _tokenService.GenerateAccessToken(user);
+            string newRefreshToken = _tokenService.GenerateRefreshToken();
+
+            // 5. Update user with new refresh token and expiry
+            int refreshExpireDays = int.Parse(_configuration["JWT_REFRESH_EXPIRE_DAYS"] ?? "7");
+
+            user.RefreshToken = newRefreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(refreshExpireDays);
+
+            _dbContext.Users.Update(user);
+            await _dbContext.SaveChangesAsync();
+
+            // 6. Return the new tokens
+            LoginResponseDto responseData = new LoginResponseDto
+            {
+                AccessToken = newAccessToken,
+                RefreshToken = newRefreshToken,
+                Name = user.Name,
+                IsDriver = user.IsDriver
+            };
+
+            return ApiResponse<LoginResponseDto>.SuccessResponse("Tokens atualizados com sucesso!", responseData);
         }
     }
 }
