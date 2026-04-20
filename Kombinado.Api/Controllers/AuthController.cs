@@ -1,4 +1,5 @@
-﻿using Kombinado.Api.Models.DTOs.Requests;
+﻿using Kombinado.Api.Models.DTOs;
+using Kombinado.Api.Models.DTOs.Requests;
 using Kombinado.Api.Services.Auth;
 using Microsoft.AspNetCore.Mvc;
 
@@ -30,6 +31,18 @@ namespace Kombinado.Api.Controllers
         public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
         {
             var response = await _authService.LoginAsync(request);
+            if (!response.Success)
+            {
+                return StatusCode(response.StatusCode, response);
+            }
+
+            return Ok(response);
+        }
+
+        [HttpPost("refresh")]
+        public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequestDto request)
+        {
+            var response = await _authService.RefreshTokenAsync(request);
             if (!response.Success)
             {
                 return StatusCode(response.StatusCode, response);
