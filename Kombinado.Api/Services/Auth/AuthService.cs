@@ -40,7 +40,19 @@ namespace Kombinado.Api.Services.Auth
                 return ApiResponse<string>.FailureResponse("Este e-mail já está cadastrado.", 400);
             }
 
-            // 4. Create new user
+            // 4. Trim password and validate strength
+            request.Password = request.Password?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
+            {
+                return ApiResponse<string>.FailureResponse("A senha deve ter no mínimo 8 caracteres.", 400);
+            }
+
+            if (!request.Password.Any(char.IsUpper) || !request.Password.Any(char.IsDigit))
+            {
+                return ApiResponse<string>.FailureResponse("A senha deve conter pelo menos uma letra maiúscula e um número.", 400);
+            }
+
+            // 5. Create new user
             UserEntity user = new UserEntity
             {
                 Id = Guid.NewGuid(),
