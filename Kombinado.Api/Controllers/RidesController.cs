@@ -60,5 +60,20 @@ namespace Kombinado.Api.Controllers
             
             return Ok(response);
         }
+        
+        [HttpPatch("{rideId}/cancel")]
+        [Authorize("DriverOnly")]
+        public async Task<IActionResult> DeleteRide(Guid rideId)
+        {
+            Guid driverId = User.GetUserId();
+            
+            var response = await _rideService.CancelRideAsync(rideId, driverId);
+            if (!response.Success)
+            {
+                return StatusCode(response.StatusCode, response);
+            }
+            
+            return Ok(response);
+        }
     }
 }
