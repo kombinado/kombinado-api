@@ -31,5 +31,20 @@ namespace Kombinado.Api.Controllers
             
             return StatusCode(201, response);
         }
+        
+        [HttpGet("me/driving")]
+        [Authorize("DriverOnly")]
+        public async Task<IActionResult> GetMyDrivingRides()
+        {
+            Guid driverId = User.GetUserId();
+            
+            var response = await _rideService.GetMyDrivingRidesAsync(driverId);
+            if (!response.Success)
+            {
+                return StatusCode(response.StatusCode, response);
+            }
+            
+            return Ok(response);
+        }
     }
 }
