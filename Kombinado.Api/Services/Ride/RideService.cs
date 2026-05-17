@@ -50,4 +50,27 @@ public class RideService : IRideService
         
         return ApiResponse<RideResponseDto>.SuccessResponse("Carona criada com sucesso.", responseDto);
     }
+
+    public async Task<ApiResponse<IEnumerable<RideResponseDto>>> GetMyDrivingRidesAsync(Guid driverId)
+    {
+        List<RideEntity> rides = await _dbContext.Rides
+            .Where(r => r.DriverId == driverId)
+            .ToListAsync();
+
+        List<RideResponseDto> responseDtos = rides.Select(r => new RideResponseDto
+        {
+            Id = r.Id,
+            Origin = r.Origin,
+            Destination = r.Destination,
+            DepartureTime = r.DepartureTime,
+            AvailableSeats = r.AvailableSeats,
+            TotalSeats = r.TotalSeats,
+            Status = r.Status
+        }).ToList();
+
+        return ApiResponse<IEnumerable<RideResponseDto>>.SuccessResponse(
+            "Caronas do motoristas recuperadas com sucesso",
+            responseDtos
+        );
+    }
 }
