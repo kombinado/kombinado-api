@@ -97,4 +97,24 @@ public class RideService : IRideService
             responseDtos
         );
     }
+
+    public async Task<ApiResponse<string>> CancelRideAsync(Guid rideId, Guid driverId)
+    {
+        RideEntity? ride = await _dbContext.Rides.FirstOrDefaultAsync(r => r.Id == rideId);
+        if (ride == null)
+        {
+            return ApiResponse<string>.FailureResponse("Carona não encontrada.", 404);
+        }
+
+        if (ride.DriverId != driverId)
+        {
+            return ApiResponse<string>.FailureResponse("Você não tem permissão para deletar esta carona.", 403);
+        }
+        
+        // Soft delete
+        ride.Status = RideStatus.Canceled;
+        await _dbContext.SaveChangesAsync();
+        
+        return ApiResponse<string>.SuccessResponse("Carona deletada com sucesso.", null);
+    }
 }
