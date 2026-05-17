@@ -8,6 +8,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using System.Text.Json;
 using Kombinado.Api.Extensions;
+using Kombinado.Api.Handlers;
 using Kombinado.Api.Models;
 
 // Load environment variables from the .env file
@@ -23,44 +24,12 @@ builder.Services.AddDbContext<KombinadoDbContext>(o => o.UseNpgsql(connectionStr
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 
-// JWT Authentication configuration
-string? secretKey = builder.Configuration["JWT_SECRET"] 
-    ?? throw new InvalidOperationException("JWT_SECRET não configurado.");
+// Global exception handling
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.MapInboundClaims = false;
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["JWT_ISSUER"],
-        ValidAudience = builder.Configuration["JWT_AUDIENCE"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
-        ClockSkew = TimeSpan.Zero
-    };
-    
-    options.Events = new JwtBearerEvents
-    {
-        OnForbidden = context =>
-        {
-            context.Response.StatusCode = 403;
-            context.Response.ContentType = "application/json";
-            
-            var response = ApiResponse<string>.FailureResponse("Acesso negado. Apenas motoristas podem acessar esta rota.", 403);
-            var json = JsonSerializer.Serialize(response);
-            
-            return context.Response.WriteAsync(json);
-        }
-    };
-});
+// JWT Authentication configuration
+builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddCustomPolicies();
 
 builder.Services.AddEndpointsApiExplorer();
@@ -68,6 +37,9 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
 
 WebApplication app = builder.Build();
+
+app.UseExceptionHandler();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -81,8 +53,6 @@ app.UseAuthorization();
 
 // Create a root endpoint
 app.Map("/", () => "Welcome to Kombinado API!");
-
-// Map controllers
 app.MapControllers();
 
 app.Run();
