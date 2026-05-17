@@ -6,6 +6,6 @@ namespace Kombinado.Api.Services.Ride
 {
     public interface IRideService
     {
-        public Task<ApiResponse<RideResponseDto>> CreateRideAsync(CreateRideRequestDto requestDto, Guid driverId);
+        Task<ApiResponse<RideResponseDto>> CreateRideAsync(CreateRideRequestDto requestDto, Guid driverId);
     }
 }
