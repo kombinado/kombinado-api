@@ -18,5 +18,9 @@
         // Navigation properties
         public ICollection<RideEntity> RidesOffered { get; set; } = new List<RideEntity>();
         public ICollection<RideRequestEntity> RequestsMade { get; set; } = new List<RideRequestEntity>();
+
+        // Authentication properties
+        public string? RefreshToken { get; set; }
+        public DateTime? RefreshTokenExpiryTime { get; set; }
     }
 }
