@@ -10,6 +10,7 @@ using System.Text.Json;
 using Kombinado.Api.Extensions;
 using Kombinado.Api.Handlers;
 using Kombinado.Api.Models;
+using Kombinado.Api.Services.Ride;
 
 // Load environment variables from the .env file
 DotNetEnv.Env.Load(Path.Combine(Directory.GetCurrentDirectory(), "..", ".env"));
@@ -23,6 +24,7 @@ builder.Services.AddDbContext<KombinadoDbContext>(o => o.UseNpgsql(connectionStr
 // Dependency Injection for services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IRideService, RideService>(); 
 
 // Global exception handling
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();

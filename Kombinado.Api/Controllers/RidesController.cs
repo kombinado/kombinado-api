@@ -12,7 +12,6 @@ namespace Kombinado.Api.Controllers
     public class RidesController : ControllerBase
     {
         private readonly IRideService _rideService;
-
         public RidesController(IRideService rideService)
         {
             _rideService = rideService;
