@@ -11,7 +11,6 @@ namespace Kombinado.Api.Services.Ride;
 public class RideService : IRideService
 {
     private readonly KombinadoDbContext _dbContext;
-
     public RideService(KombinadoDbContext dbContext)
     {
         _dbContext = dbContext;
