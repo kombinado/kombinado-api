@@ -130,7 +130,7 @@ public class RideRequestService : IRideRequestService
         }
 
         if (request.Status == RideRequestStatus.Accepted && 
-            request.Ride.DepartureTime - DateTime.UtcNow < TimeSpan.FromMinutes(15))
+            request.Ride.DepartureTime.ToLocalTime() - DateTime.UtcNow < TimeSpan.FromMinutes(15))
         {
             return ApiResponse<string>.FailureResponse(
                 "Não é possível cancelar uma solicitação aceita a menos de 15 minutos do horário de partida.", 
