@@ -100,8 +100,7 @@ public class RideRequestService : IRideRequestService
                 Status = request.Status,
                 MeetingPointSuggestion = request.MeetingPointSuggestion,
                 PassengerName = driver.Name, 
-                PhoneNumber = null 
-            }
+                PhoneNumber = request.Status == RideRequestStatus.Accepted ? driver.WhatsApp : null            }
         ).ToListAsync();
         
         return ApiResponse<IEnumerable<RideRequestResponseDto>>.SuccessResponse(
