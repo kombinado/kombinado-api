@@ -85,14 +85,69 @@ public class RideRequestService : IRideRequestService
         );
     }
 
-    public Task<ApiResponse<IEnumerable<RideRequestResponseDto>>> GetMyRequestsAsync(Guid passengerId)
+    public async Task<ApiResponse<IEnumerable<RideRequestResponseDto>>> GetMyRequestsAsync(Guid passengerId)
     {
-        throw new NotImplementedException();
+        List<RideRequestResponseDto> responseList = await (
+            from request in _dbContext.RideRequests
+            where request.PassengerId == passengerId
+        
+            join ride in _dbContext.Rides on request.RideId equals ride.Id
+            join driver in _dbContext.Users on ride.DriverId equals driver.Id
+        
+            select new RideRequestResponseDto
+            {
+                Id = request.Id,
+                Status = request.Status,
+                MeetingPointSuggestion = request.MeetingPointSuggestion,
+                PassengerName = driver.Name, 
+                PhoneNumber = null 
+            }
+        ).ToListAsync();
+        
+        return ApiResponse<IEnumerable<RideRequestResponseDto>>.SuccessResponse(
+            "Solicitações de vaga recuperadas com sucesso.",
+            responseList
+        );
     }
 
-    public Task<ApiResponse<string>> CancelRequestAsync(Guid requestId, Guid passengerId)
+    public async Task<ApiResponse<string>> CancelRequestAsync(Guid requestId, Guid passengerId)
     {
-        throw new NotImplementedException();
+        RideRequestEntity? request = await _dbContext.RideRequests
+            .Include(rr => rr.Ride)
+            .FirstOrDefaultAsync(rr => rr.Id == requestId && rr.PassengerId == passengerId);
+        
+        if (request == null)
+        {
+            return ApiResponse<string>.FailureResponse("Solicitação de vaga não encontrada.", 404);
+        }
+        
+        if (request.Status == RideRequestStatus.Rejected)
+        {
+            return ApiResponse<string>.FailureResponse(
+                "Não é possível cancelar uma solicitação que já foi rejeitada pelo motorista.", 
+                400
+            );
+        }
+
+        if (request.Status == RideRequestStatus.Accepted && 
+            request.Ride.DepartureTime - DateTime.UtcNow < TimeSpan.FromMinutes(15))
+        {
+            return ApiResponse<string>.FailureResponse(
+                "Não é possível cancelar uma solicitação aceita a menos de 15 minutos do horário de partida.", 
+                400
+            );
+        }
+        
+        if (request.Status == RideRequestStatus.Accepted)
+        {
+            request.Ride.AvailableSeats += 1;
+            request.Ride.Status = request.Ride.Status == RideStatus.Full ? RideStatus.Open : request.Ride.Status;
+        }
+        
+        request.Status = RideRequestStatus.Cancelled;
+        await _dbContext.SaveChangesAsync();
+        
+        return ApiResponse<string>.SuccessResponse("Solicitação de vaga cancelada com sucesso.");
     }
 
     public Task<ApiResponse<IEnumerable<RideRequestResponseDto>>> GetRequestsByRideAsync(Guid rideId, Guid driverId)
