@@ -30,4 +30,32 @@ public class RideRequestController : ControllerBase
         
         return Ok(response);
     }
+    
+    [HttpGet("me")]
+    public async Task<IActionResult> GetMyRequests()
+    {
+        Guid passengerId = User.GetUserId();
+        
+        var response = await _rideRequestService.GetMyRequestsAsync(passengerId);
+        if (!response.Success)
+        {
+            return StatusCode(response.StatusCode, response);
+        }
+        
+        return Ok(response);
+    }
+    
+    [HttpPatch("{requestId}/cancel")]
+    public async Task<IActionResult> CancelRequest(Guid requestId)
+    {
+        Guid passengerId = User.GetUserId();
+        
+        var response = await _rideRequestService.CancelRequestAsync(requestId, passengerId);
+        if (!response.Success)
+        {
+            return StatusCode(response.StatusCode, response);
+        }
+        
+        return Ok(response);
+    }
 }
