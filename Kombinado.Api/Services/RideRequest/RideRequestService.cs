@@ -150,9 +150,30 @@ public class RideRequestService : IRideRequestService
         return ApiResponse<string>.SuccessResponse("Solicitação de vaga cancelada com sucesso.");
     }
 
-    public Task<ApiResponse<IEnumerable<RideRequestResponseDto>>> GetRequestsByRideAsync(Guid rideId, Guid driverId)
+    public async Task<ApiResponse<IEnumerable<RideRequestResponseDto>>> GetRequestsByRideAsync(Guid rideId, Guid driverId)
     {
-        throw new NotImplementedException();
+        List<RideRequestResponseDto> responseList = await (
+            from request in _dbContext.RideRequests
+            where request.RideId == rideId && (request.Status == RideRequestStatus.Pending ||
+                                               request.Status == RideRequestStatus.Accepted)
+
+            join ride in _dbContext.Rides on request.RideId equals ride.Id
+            join driver in _dbContext.Users on ride.DriverId equals driver.Id
+
+            select new RideRequestResponseDto
+            {
+                Id = request.Id,
+                Status = request.Status,
+                MeetingPointSuggestion = request.MeetingPointSuggestion,
+                PassengerName = driver.Name, 
+                PhoneNumber = null
+            }
+        ).ToListAsync();
+        
+        return ApiResponse<IEnumerable<RideRequestResponseDto>>.SuccessResponse(
+            "Solicitações de vaga para a carona recuperadas com sucesso.",
+            responseList
+        );
     }
 
     public Task<ApiResponse<string>> RespondToRequestAsync(Guid requestId, Guid driverId, bool accept)
