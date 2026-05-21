@@ -89,8 +89,8 @@ public class RideRequestService : IRideRequestService
     {
         List<RideRequestResponseDto> responseList = await (
             from request in _dbContext.RideRequests
-            where request.PassengerId == passengerId
-        
+            where request.PassengerId == passengerId && request.Status != RideRequestStatus.Cancelled     
+            
             join ride in _dbContext.Rides on request.RideId equals ride.Id
             join driver in _dbContext.Users on ride.DriverId equals driver.Id
         
