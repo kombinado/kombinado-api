@@ -19,7 +19,7 @@ namespace Kombinado.Api.Controllers
 
         [HttpPost]
         [Authorize("DriverOnly")]
-        public async Task<IActionResult> CreateRide([FromBody] CreateRideRequestDto request)
+        public async Task<IActionResult> CreateRide([FromBody] CreateRideDto request)
         {
             Guid driverId = User.GetUserId();
             
