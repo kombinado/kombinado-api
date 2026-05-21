@@ -11,24 +11,23 @@ namespace Kombinado.Api.Services.Ride;
 public class RideService : IRideService
 {
     private readonly KombinadoDbContext _dbContext;
-
     public RideService(KombinadoDbContext dbContext)
     {
         _dbContext = dbContext;
     }
 
-    public async Task<ApiResponse<RideResponseDto>> CreateRideAsync(CreateRideRequestDto requestDto, Guid driverId)
+    public async Task<ApiResponse<RideResponseDto>> CreateRideAsync(CreateRideDto dto, Guid driverId)
     {
         // 1. Create a ride
         RideEntity newRide = new RideEntity
         {
             Id = Guid.NewGuid(),
             DriverId = driverId,
-            Origin = requestDto.Origin,
-            Destination = requestDto.Destination,
-            DepartureTime = requestDto.DepartureTime,
-            AvailableSeats = requestDto.TotalSeats,
-            TotalSeats = requestDto.TotalSeats,
+            Origin = dto.Origin,
+            Destination = dto.Destination,
+            DepartureTime = dto.DepartureTime,
+            AvailableSeats = dto.TotalSeats,
+            TotalSeats = dto.TotalSeats,
             Status = RideStatus.Open
         };
         

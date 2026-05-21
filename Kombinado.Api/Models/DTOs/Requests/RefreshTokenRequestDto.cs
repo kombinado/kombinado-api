@@ -1,4 +1,4 @@
-﻿namespace Kombinado.Api.Models.DTOs
+﻿namespace Kombinado.Api.Models.DTOs.Requests
 {
     public class RefreshTokenRequestDto
     {
