@@ -58,4 +58,34 @@ public class RideRequestController : ControllerBase
         
         return Ok(response);
     }
+    
+    [HttpGet("ride/{rideId}")]
+    [Authorize(Policy = "DriverOnly")]
+    public async Task<IActionResult> GetRequestsByRide(Guid rideId)
+    {
+        Guid driverId = User.GetUserId();
+    
+        var response = await _rideRequestService.GetRequestsByRideAsync(rideId, driverId);
+        if (!response.Success)
+        {
+            return StatusCode(response.StatusCode, response);
+        }
+        
+        return StatusCode(200, response); 
+    }
+    
+    [HttpPatch("{requestId}/respond")]
+    [Authorize(Policy = "DriverOnly")]
+    public async Task<IActionResult> RespondToRequest(Guid requestId, [FromBody] RespondRequestDto dto)
+    {
+        Guid driverId = User.GetUserId();
+    
+        var response = await _rideRequestService.RespondToRequestAsync(requestId, driverId, dto.Accept);
+        if (!response.Success)
+        {
+            return StatusCode(response.StatusCode, response);
+        }
+
+        return StatusCode(200, response);
+    }
 }
