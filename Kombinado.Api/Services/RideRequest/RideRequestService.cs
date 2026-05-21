@@ -154,18 +154,19 @@ public class RideRequestService : IRideRequestService
     {
         List<RideRequestResponseDto> responseList = await (
             from request in _dbContext.RideRequests
-            where request.RideId == rideId && (request.Status == RideRequestStatus.Pending ||
-                                               request.Status == RideRequestStatus.Accepted)
-
             join ride in _dbContext.Rides on request.RideId equals ride.Id
-            join driver in _dbContext.Users on ride.DriverId equals driver.Id
+            join passenger in _dbContext.Users on request.PassengerId equals passenger.Id
+            
+            where request.RideId == rideId 
+                  && ride.DriverId == driverId 
+                  && (request.Status == RideRequestStatus.Pending || request.Status == RideRequestStatus.Accepted)
 
             select new RideRequestResponseDto
             {
                 Id = request.Id,
                 Status = request.Status,
                 MeetingPointSuggestion = request.MeetingPointSuggestion,
-                PassengerName = driver.Name, 
+                PassengerName = passenger.Name,
                 PhoneNumber = null
             }
         ).ToListAsync();
@@ -176,8 +177,50 @@ public class RideRequestService : IRideRequestService
         );
     }
 
-    public Task<ApiResponse<string>> RespondToRequestAsync(Guid requestId, Guid driverId, bool accept)
+    public async Task<ApiResponse<string>> RespondToRequestAsync(Guid requestId, Guid driverId, bool accept)
     {
-        throw new NotImplementedException();
+        RideRequestEntity? request = await _dbContext.RideRequests
+            .Include(rr => rr.Ride)
+            .FirstOrDefaultAsync(rr => rr.Id == requestId &&  rr.Ride.DriverId == driverId);
+        
+        if (request == null)
+        {
+            return ApiResponse<string>.FailureResponse("Solicitação de vaga não encontrada.", 404);
+        }
+        
+        if (request.Status != RideRequestStatus.Pending)
+        {
+            return ApiResponse<string>.FailureResponse("Esta solicitação já foi respondida.", 400);
+        }
+
+        if (accept)
+        {
+            if (request.Ride.AvailableSeats <= 0 || request.Ride.Status != RideStatus.Open)
+            {
+                return ApiResponse<string>.FailureResponse(
+                    "Não é possível aceitar esta solicitação, pois a carona não tem vagas disponíveis ou não está mais aberta.",
+                    400
+                );
+            }
+            
+            request.Status = RideRequestStatus.Accepted;
+            request.Ride.AvailableSeats -= 1;
+            if (request.Ride.AvailableSeats == 0)
+            {
+                request.Ride.Status = RideStatus.Full;
+            }
+        }
+        else
+        {
+            request.Status = RideRequestStatus.Rejected;
+        }
+        
+        await _dbContext.SaveChangesAsync();
+        
+        string resultMessage = accept 
+            ? "Solicitação de vaga aceita com sucesso." 
+            : "Solicitação de vaga rejeitada com sucesso.";
+        
+        return ApiResponse<string>.SuccessResponse(resultMessage);
     }
 }
