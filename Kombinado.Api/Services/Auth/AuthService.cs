@@ -9,6 +9,7 @@ using Kombinado.Api.Utils;
 using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Kombinado.Api.Services.Auth
 {
@@ -140,7 +141,7 @@ namespace Kombinado.Api.Services.Auth
 
             // 3. Maximum Security Validation (Rotation)
             // - Does the user exist?
-            // - Does the sent Refresh Token match exactly with the one in the database?
+            // - Does the scent Refresh Token match exactly with the one in the database?
             // - Is the Refresh Token still within the validity period (e.g., 7 days)?
             if (user == null ||
                 user.RefreshToken != request.RefreshToken ||
@@ -172,6 +173,31 @@ namespace Kombinado.Api.Services.Auth
             };
 
             return ApiResponse<LoginResponseDto>.SuccessResponse("Tokens atualizados com sucesso!", responseData);
+        }
+
+        public async Task<ApiResponse<UserResponseDto>> GetUserProfileAsync(Guid userId)
+        {
+            UserResponseDto? user = await _dbContext.Users
+                .Where(u => u.Id == userId)
+                .Select(u => new UserResponseDto
+                {
+                    Id = u.Id,
+                    Name = u.Name,
+                    Email = u.Email,
+                    IsDriver = u.IsDriver,
+                    VehicleModel = u.VehicleModel,
+                    VehicleColor = u.VehicleColor,
+                    VehiclePlate = u.VehiclePlate,
+                    Course = u.Course,
+                    WhatsApp = u.WhatsApp
+                })
+                .FirstOrDefaultAsync();
+            if (user == null)
+            {
+                return ApiResponse<UserResponseDto>.FailureResponse("Usuário não encontrado.", 404);
+            }
+
+            return ApiResponse<UserResponseDto>.SuccessResponse("Perfil recuperado com sucesso.", user);
         }
     }
 }

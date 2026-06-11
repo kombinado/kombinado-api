@@ -10,5 +10,6 @@ namespace Kombinado.Api.Services.Auth
         Task<ApiResponse<string>> SignupAsync(SignupRequestDto request);
         Task<ApiResponse<LoginResponseDto>> LoginAsync(LoginRequestDto request);
         Task<ApiResponse<LoginResponseDto>> RefreshTokenAsync(RefreshTokenRequestDto request);
+        Task<ApiResponse<UserResponseDto>> GetUserProfileAsync(Guid userId);
     }
 }

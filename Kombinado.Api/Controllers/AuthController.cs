@@ -1,6 +1,8 @@
-﻿using Kombinado.Api.Models.DTOs;
+﻿using Kombinado.Api.Extensions;
+using Kombinado.Api.Models.DTOs;
 using Kombinado.Api.Models.DTOs.Requests;
 using Kombinado.Api.Services.Auth;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Kombinado.Api.Controllers
@@ -48,6 +50,21 @@ namespace Kombinado.Api.Controllers
                 return StatusCode(response.StatusCode, response);
             }
 
+            return Ok(response);
+        }
+        
+        [Authorize]
+        [HttpGet("me")]
+        public async Task<IActionResult> GetMyProfile()
+        {
+            Guid userId = User.GetUserId();
+            
+            var response = await _authService.GetUserProfileAsync(userId);
+            if (!response.Success)
+            {
+                return StatusCode(response.StatusCode, response);
+            }
+            
             return Ok(response);
         }
     }
