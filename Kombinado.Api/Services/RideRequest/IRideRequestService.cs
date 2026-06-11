@@ -14,7 +14,7 @@ public interface IRideRequestService
     /// <summary>
     /// List all ride requests made by the passenger (My Requests Panel).
     /// </summary>
-    Task<ApiResponse<IEnumerable<RideRequestResponseDto>>> GetMyRequestsAsync(Guid passengerId);
+    Task<ApiResponse<IEnumerable<MyRequestResponseDto>>> GetMyRequestsAsync(Guid passengerId);
 
     /// <summary>
     /// Allow passengers to cancel a pending/accepted ride request.

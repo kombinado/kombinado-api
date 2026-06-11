@@ -85,25 +85,33 @@ public class RideRequestService : IRideRequestService
         );
     }
 
-    public async Task<ApiResponse<IEnumerable<RideRequestResponseDto>>> GetMyRequestsAsync(Guid passengerId)
+    public async Task<ApiResponse<IEnumerable<MyRequestResponseDto>>> GetMyRequestsAsync(Guid passengerId)
     {
-        List<RideRequestResponseDto> responseList = await (
+        List<MyRequestResponseDto> responseList = await (
             from request in _dbContext.RideRequests
             where request.PassengerId == passengerId && request.Status != RideRequestStatus.Cancelled     
             
             join ride in _dbContext.Rides on request.RideId equals ride.Id
             join driver in _dbContext.Users on ride.DriverId equals driver.Id
         
-            select new RideRequestResponseDto
+            select new MyRequestResponseDto
             {
                 Id = request.Id,
+                RideId = ride.Id,
+                DriverName = driver.Name,
                 Status = request.Status,
                 MeetingPointSuggestion = request.MeetingPointSuggestion,
-                PassengerName = driver.Name, 
-                PhoneNumber = request.Status == RideRequestStatus.Accepted ? driver.WhatsApp : null            }
+                PhoneNumber = request.Status == RideRequestStatus.Accepted ? driver.WhatsApp : null,
+                Origin = ride.Origin,
+                Destination = ride.Destination,
+                DepartureTime = ride.DepartureTime,
+                VehicleModel = driver.VehicleModel,
+                VehicleColor = driver.VehicleColor,
+                VehiclePlate = driver.VehiclePlate
+            }
         ).ToListAsync();
         
-        return ApiResponse<IEnumerable<RideRequestResponseDto>>.SuccessResponse(
+        return ApiResponse<IEnumerable<MyRequestResponseDto>>.SuccessResponse(
             "Solicitações de vaga recuperadas com sucesso.",
             responseList
         );
