@@ -53,6 +53,7 @@ public class RideService : IRideService
     public async Task<ApiResponse<IEnumerable<RideResponseDto>>> GetAvailableRidesAsync(Guid currentUserId)
     {
         List<RideEntity> availableRides = await _dbContext.Rides
+            .Include(r => r.Driver)
             .Where(r => r.Status == RideStatus.Open && r.AvailableSeats > 0 && r.DriverId != currentUserId)
             .OrderBy(r => r.DepartureTime)
             .ToListAsync();
@@ -65,7 +66,10 @@ public class RideService : IRideService
             DepartureTime = r.DepartureTime,
             AvailableSeats = r.AvailableSeats,
             TotalSeats = r.TotalSeats,
-            Status = r.Status
+            Status = r.Status,
+            VehicleModel = r.Driver.VehicleModel,
+            VehicleColor = r.Driver.VehicleColor,
+            VehiclePlate = r.Driver.VehiclePlate
         }).ToList();
         
         return ApiResponse<IEnumerable<RideResponseDto>>.SuccessResponse(
@@ -77,6 +81,7 @@ public class RideService : IRideService
     public async Task<ApiResponse<IEnumerable<RideResponseDto>>> GetMyDrivingRidesAsync(Guid driverId)
     {
         List<RideEntity> rides = await _dbContext.Rides
+            .Include(r => r.Requests)
             .Where(r => r.DriverId == driverId)
             .ToListAsync();
 
@@ -88,7 +93,8 @@ public class RideService : IRideService
             DepartureTime = r.DepartureTime,
             AvailableSeats = r.AvailableSeats,
             TotalSeats = r.TotalSeats,
-            Status = r.Status
+            Status = r.Status,
+            PendingRequestsCount = r.Requests.Count(req => req.Status == RideRequestStatus.Pending)
         }).ToList();
 
         return ApiResponse<IEnumerable<RideResponseDto>>.SuccessResponse(
