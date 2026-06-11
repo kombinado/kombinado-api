@@ -46,7 +46,7 @@ The platform defines two major user roles based on their registration profile:
    - If rejected, the request status is updated to **Rejected ("Recusada")**, and the passenger is notified via the API status.
 5. **Ride & Request Cancellation**: 
    - If a driver cancels a ride, all accepted/pending requests are automatically transitioned to **Canceled ("Cancelada")**.
-   - Passengers can cancel their seat requests at any time, returning the seat back to the pool if already accepted.
+   - Passengers can cancel their seat requests, returning the seat back to the pool if already accepted. However, **accepted requests cannot be canceled if the ride's departure time is within 15 minutes**.
 
 ---
 
@@ -288,11 +288,7 @@ These endpoints manage ride postings and require `Authorization: Bearer <token>`
       "departureTime": "2026-06-01T18:30:00Z",
       "totalSeats": 4,
       "availableSeats": 4,
-      "status": "Aberta",
-      "vehicleModel": "Toyota Corolla",
-      "vehicleColor": "Silver",
-      "vehiclePlate": "ABC1D23",
-      "pendingRequestsCount": 0
+      "status": "Aberta"
     },
     "statusCode": 201
   }
@@ -317,8 +313,7 @@ Lists all rides in **Open ("Aberta")** status, excluding rides offered by the ac
         "status": "Aberta",
         "vehicleModel": "Honda Civic",
         "vehicleColor": "Black",
-        "vehiclePlate": "XYZ9W87",
-        "pendingRequestsCount": 0
+        "vehiclePlate": "XYZ9W87"
       }
     ],
     "statusCode": 200
@@ -338,15 +333,7 @@ Cancels a specific ride and sets its status to `"Cancelada"`.
   {
     "success": true,
     "message": "Ride canceled successfully.",
-    "data": {
-      "id": "a1b2c3d4-e5f6-...",
-      "origin": "Main Campus",
-      "destination": "Downtown",
-      "departureTime": "2026-06-01T18:30:00Z",
-      "totalSeats": 4,
-      "availableSeats": 0,
-      "status": "Cancelada"
-    },
+    "data": null,
     "statusCode": 200
   }
   ```
@@ -375,7 +362,7 @@ Allows a passenger to request a seat on a ride.
       "passengerName": "John Doe",
       "status": "Pendente",
       "meetingPointSuggestion": "In front of the library building",
-      "phoneNumber": "5534999998888"
+      "phoneNumber": null
     },
     "statusCode": 200
   }
@@ -417,13 +404,7 @@ Allows a passenger to retract a pending or accepted seat request.
   {
     "success": true,
     "message": "Ride request canceled successfully.",
-    "data": {
-      "id": "8f9e0d1a-2b3c-...",
-      "passengerName": "John Doe",
-      "status": "Cancelada",
-      "meetingPointSuggestion": "In front of the library building",
-      "phoneNumber": "5534999998888"
-    },
+    "data": null,
     "statusCode": 200
   }
   ```
@@ -447,13 +428,7 @@ Allows a driver to accept or decline a passenger's seat booking request.
   {
     "success": true,
     "message": "Request status updated successfully.",
-    "data": {
-      "id": "8f9e0d1a-2b3c-...",
-      "passengerName": "John Doe",
-      "status": "Aceita",
-      "meetingPointSuggestion": "In front of the library building",
-      "phoneNumber": "5534999998888"
-    },
+    "data": null,
     "statusCode": 200
   }
   ```
@@ -495,7 +470,7 @@ O sistema reconhece dois perfis de usuários devidamente autenticados:
    - Se **Recusar**, o status da solicitação atualiza para **Recusada**, permitindo ao passageiro buscar outras opções.
 5. **Políticas de Cancelamento**:
    - Se o motorista cancelar a carona, todos os passageiros vinculados têm suas solicitações marcadas automaticamente como **Cancelada**.
-   - O passageiro pode remover sua própria reserva a qualquer momento.
+   - O passageiro pode remover sua própria reserva, devolvendo a vaga para a carona caso já tenha sido aceita. No entanto, **solicitações aceitas não podem ser canceladas se faltarem menos de 15 minutos para o horário de partida**.
 
 ---
 
@@ -759,7 +734,10 @@ Retorna todas as ofertas ativas no estado **Aberta**, ignorando caronas criadas 
         "departureTime": "2026-06-01T18:30:00Z",
         "totalSeats": 4,
         "availableSeats": 2,
-        "status": "Aberta"
+        "status": "Aberta",
+        "vehicleModel": "Honda Civic",
+        "vehicleColor": "Preto",
+        "vehiclePlate": "XYZ9W87"
       }
     ],
     "statusCode": 200
@@ -779,15 +757,7 @@ Invalida o trajeto e desmarca as vagas preenchidas, definindo o status como `"Ca
   {
     "success": true,
     "message": "Carona cancelada com sucesso.",
-    "data": {
-      "id": "a1b2c3d4-e5f6-...",
-      "origin": "Portaria Principal",
-      "destination": "Terminal",
-      "departureTime": "2026-06-01T18:30:00Z",
-      "totalSeats": 4,
-      "availableSeats": 0,
-      "status": "Cancelada"
-    },
+    "data": null,
     "statusCode": 200
   }
   ```
@@ -816,7 +786,7 @@ Cria um pedido pendente de assento na carona informada.
       "passengerName": "João Silva",
       "status": "Pendente",
       "meetingPointSuggestion": "Em frente à biblioteca central",
-      "phoneNumber": "5534999998888"
+      "phoneNumber": null
     },
     "statusCode": 200
   }
@@ -833,10 +803,17 @@ Recupera todos os pedidos de assento criados pelo passageiro logado.
     "data": [
       {
         "id": "8f9e0d1a-2b3c-...",
-        "passengerName": "João Silva",
+        "rideId": "a1b2c3d4-e5f6-...",
+        "driverName": "Jane Doe",
         "status": "Pendente",
         "meetingPointSuggestion": "Em frente à biblioteca central",
-        "phoneNumber": "5534999998888"
+        "phoneNumber": null,
+        "origin": "Portaria Principal",
+        "destination": "Terminal Central",
+        "departureTime": "2026-06-01T18:30:00Z",
+        "vehicleModel": "Honda Civic",
+        "vehicleColor": "Preto",
+        "vehiclePlate": "XYZ9W87"
       }
     ],
     "statusCode": 200
@@ -851,13 +828,7 @@ Permite a desistência de um pedido feito previamente pelo passageiro.
   {
     "success": true,
     "message": "Solicitação cancelada com sucesso.",
-    "data": {
-      "id": "8f9e0d1a-2b3c-...",
-      "passengerName": "João Silva",
-      "status": "Cancelada",
-      "meetingPointSuggestion": "Em frente à biblioteca central",
-      "phoneNumber": "5534999998888"
-    },
+    "data": null,
     "statusCode": 200
   }
   ```
@@ -881,13 +852,7 @@ Deferimento (Aceite ou Recusa) de reservas sob a ótica do motorista.
   {
     "success": true,
     "message": "Situação do pedido atualizada com sucesso.",
-    "data": {
-      "id": "8f9e0d1a-2b3c-...",
-      "passengerName": "João Silva",
-      "status": "Aceita",
-      "meetingPointSuggestion": "Em frente à biblioteca central",
-      "phoneNumber": "5534999998888"
-    },
+    "data": null,
     "statusCode": 200
   }
   ```
