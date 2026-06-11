@@ -288,7 +288,11 @@ These endpoints manage ride postings and require `Authorization: Bearer <token>`
       "departureTime": "2026-06-01T18:30:00Z",
       "totalSeats": 4,
       "availableSeats": 4,
-      "status": "Aberta"
+      "status": "Aberta",
+      "vehicleModel": "Toyota Corolla",
+      "vehicleColor": "Silver",
+      "vehiclePlate": "ABC1D23",
+      "pendingRequestsCount": 0
     },
     "statusCode": 201
   }
@@ -310,7 +314,11 @@ Lists all rides in **Open ("Aberta")** status, excluding rides offered by the ac
         "departureTime": "2026-06-01T18:30:00Z",
         "totalSeats": 4,
         "availableSeats": 2,
-        "status": "Aberta"
+        "status": "Aberta",
+        "vehicleModel": "Honda Civic",
+        "vehicleColor": "Black",
+        "vehiclePlate": "XYZ9W87",
+        "pendingRequestsCount": 0
       }
     ],
     "statusCode": 200
@@ -384,10 +392,17 @@ Retrieves all requests made by the logged-in passenger.
     "data": [
       {
         "id": "8f9e0d1a-2b3c-...",
-        "passengerName": "John Doe",
+        "rideId": "a1b2c3d4-e5f6-...",
+        "driverName": "Jane Doe",
         "status": "Pendente",
         "meetingPointSuggestion": "In front of the library building",
-        "phoneNumber": "5534999998888"
+        "phoneNumber": null,
+        "origin": "Main Campus",
+        "destination": "Downtown",
+        "departureTime": "2026-06-01T18:30:00Z",
+        "vehicleModel": "Honda Civic",
+        "vehicleColor": "Black",
+        "vehiclePlate": "XYZ9W87"
       }
     ],
     "statusCode": 200
