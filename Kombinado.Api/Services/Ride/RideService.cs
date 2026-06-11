@@ -105,7 +105,10 @@ public class RideService : IRideService
 
     public async Task<ApiResponse<string>> CancelRideAsync(Guid rideId, Guid driverId)
     {
-        RideEntity? ride = await _dbContext.Rides.FirstOrDefaultAsync(r => r.Id == rideId);
+        RideEntity? ride = await _dbContext.Rides
+            .Include(r => r.Requests)
+            .FirstOrDefaultAsync(r => r.Id == rideId);
+            
         if (ride == null)
         {
             return ApiResponse<string>.FailureResponse("Carona não encontrada.", 404);
@@ -118,6 +121,19 @@ public class RideService : IRideService
         
         // Soft delete
         ride.Status = RideStatus.Canceled;
+
+        // Cancel associated requests
+        if (ride.Requests != null)
+        {
+            foreach (var request in ride.Requests)
+            {
+                if (request.Status == RideRequestStatus.Pending || request.Status == RideRequestStatus.Accepted)
+                {
+                    request.Status = RideRequestStatus.Cancelled;
+                }
+            }
+        }
+
         await _dbContext.SaveChangesAsync();
         
         return ApiResponse<string>.SuccessResponse("Carona deletada com sucesso.", null);
