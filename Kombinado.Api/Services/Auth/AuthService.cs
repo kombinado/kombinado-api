@@ -28,7 +28,8 @@ namespace Kombinado.Api.Services.Auth
 
         public async Task<ApiResponse<string>> SignupAsync(SignupRequestDto request)
         {
-            // 1. Check if email is student email
+            // 1. Normalize email and check if it is a student email
+            request.Email = EmailUtils.Normalize(request.Email);
             if (!EmailUtils.IsStudentEmail(request.Email))
             {
                 return ApiResponse<string>.FailureResponse("É necessário um e-mail institucional do IFTM (@estudante.iftm.edu.br).", 400);
@@ -87,7 +88,7 @@ namespace Kombinado.Api.Services.Auth
         public async Task<ApiResponse<LoginResponseDto>> LoginAsync(LoginRequestDto request)
         {
             // 1. Clear and normalize input (trim and lowercase email)
-            request.Email = request.Email?.Trim().ToLower() ?? string.Empty;
+            request.Email = EmailUtils.Normalize(request.Email);
             request.Password = request.Password?.Trim() ?? string.Empty;
 
             // 2. Get user by email (if exists)

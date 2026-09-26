@@ -1,0 +1,23 @@
+# Build outputs
+**/bin/
+**/obj/
+
+# IDE and tooling
+**/.vs/
+**/.idea/
+**/.vscode/
+.git/
+
+# Secrets and local-only files (configuration comes from environment variables)
+**/.env
+**/*.env
+*.local.md
+backups/
+
+# Not needed to build the image
+docs/
+README.md
+LICENSE
+docker-compose.yaml
+**/Dockerfile
+**/.dockerignore

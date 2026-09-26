@@ -42,6 +42,14 @@ builder.Services.AddControllers();
 
 WebApplication app = builder.Build();
 
+// Apply pending EF Core migrations on startup when enabled (set by docker-compose)
+if (app.Configuration.GetValue<bool>("APPLY_MIGRATIONS"))
+{
+    using IServiceScope scope = app.Services.CreateScope();
+    KombinadoDbContext dbContext = scope.ServiceProvider.GetRequiredService<KombinadoDbContext>();
+    dbContext.Database.Migrate();
+}
+
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
