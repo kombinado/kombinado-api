@@ -118,7 +118,7 @@ erDiagram
 * **Runtime**: [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (ASP.NET Core Web API)
 * **Object-Relational Mapper**: [Entity Framework Core (EF Core)](https://learn.microsoft.com/en-us/ef/core/)
 * **Database**: [PostgreSQL](https://www.postgresql.org/)
-* **Containerization**: [Docker & Docker Compose](https://www.docker.com/) (for running database instances and pgAdmin)
+* **Containerization**: [Docker & Docker Compose](https://www.docker.com/) (runs the API, PostgreSQL and pgAdmin with a single command)
 * **Authentication**: [JSON Web Tokens (JWT)](https://jwt.io/) with symmetric key signing and Refresh Token rotation.
 * **API Documentation**: Swagger/OpenAPI UI.
 
@@ -127,11 +127,14 @@ erDiagram
 ## <a id="prerequisites-setup"></a>⚙️ Prerequisites & Setup
 
 Ensure the following tools are installed:
-* **.NET 8 SDK** (Command-line tools `dotnet` and EF CLI `dotnet ef`)
-* **Docker Engine & Docker Compose**
+* **Docker Engine & Docker Compose v2** (the `docker compose` command) — this is all you need to run the project.
+* **.NET 8 SDK** and the EF CLI (`dotnet ef`) — only needed to run/debug the API outside Docker or to create new migrations.
 
 ### Environment Configuration (`.env`)
-Create a `.env` file in the project root directory (next to `docker-compose.yml`) using the following template:
+Copy `.env.example` to `.env` in the project root directory (next to `docker-compose.yaml`) and fill in the values:
+```bash
+cp .env.example .env
+```
 
 ```env
 # 1. PostgreSQL Database Credentials
@@ -143,7 +146,7 @@ POSTGRES_DB=kombinado_db
 PGADMIN_DEFAULT_EMAIL=admin@kombinado.com
 PGADMIN_DEFAULT_PASSWORD=admin
 
-# 3. ASP.NET Core Connection String
+# 3. ASP.NET Core Connection String (only used when running the API outside Docker)
 CONNECTION_STRING=Host=localhost;Database=kombinado_db;Username=postgres;Password=postgres;Port=5432;
 
 # 4. JWT Authentication Details
@@ -153,40 +156,58 @@ JWT_REFRESH_EXPIRE_DAYS=7
 JWT_ISSUER=Kombinado
 JWT_AUDIENCE=KombinadoApp
 ```
+* `JWT_SECRET` must have **at least 32 characters**.
+* Inside Docker Compose, the API builds its own connection string from the `POSTGRES_*` variables (pointing to the `db` service), so `CONNECTION_STRING` only matters for [Option 2](#run-locally).
+* If a required variable is missing, `docker compose` stops before starting and tells you which one.
 
 ---
 
 ## <a id="how-to-run"></a>🚀 How to Run the Project
 
-Follow these steps to spin up the entire database and API in less than 5 minutes:
-
-### Step 1: Start the PostgreSQL Database Container
-Run Docker Compose from the project root directory:
+### Option 1 — Docker Compose (recommended)
+A single command builds the API image, starts PostgreSQL and pgAdmin, waits until the database is healthy and **applies the EF Core migrations automatically**:
 ```bash
-docker-compose up -d
-```
-*This starts a PostgreSQL instance on port `5432` and pgAdmin on port `5050`.*
-
-### Step 2: Navigate to the API Directory
-```bash
-cd Kombinado.Api
+docker compose up -d --build
 ```
 
-### Step 3: Install dependencies and apply EF Migrations
-Ensure the EF tools are installed, then run the migration script to configure database schemas:
-```bash
-dotnet ef database update
-```
+| Service | Address |
+|---|---|
+| API | `http://localhost:8080` |
+| Swagger UI | `http://localhost:8080/swagger` |
+| pgAdmin | `http://localhost:5050` |
+| PostgreSQL | `localhost:5432` |
 
-### Step 4: Launch the API
+Useful commands:
 ```bash
-dotnet run
+docker compose logs -f api      # follow the API logs
+docker compose up -d --build    # rebuild the API image after changing the code
+docker compose down             # stop everything (database data is kept)
+docker compose down -v          # stop everything and ERASE the database volume
 ```
-The terminal will display the active listening URLs (typically `http://localhost:5000` or `https://localhost:5001`).
+> Without `--build`, Compose reuses the previously built image — code changes only show up after a rebuild.
 
-### Step 5: Explore with Swagger UI
-Navigate to the interactive Swagger UI to review and invoke endpoints live:
-👉 `http://localhost:<PORT>/swagger` (e.g., `http://localhost:5000/swagger`)
+### <a id="run-locally"></a>Option 2 — API on your machine (debugging in Rider / VS Code)
+1. Start only the database:
+   ```bash
+   docker compose up -d db
+   ```
+2. Apply the migrations. Run it **from `Kombinado.Api/`**, because the API loads the `.env` from the parent directory:
+   ```bash
+   cd Kombinado.Api
+   dotnet ef database update
+   ```
+3. Start the API with the **`http`** launch profile (in Rider, pick the `http` run configuration):
+   ```bash
+   dotnet run --launch-profile http
+   ```
+   The API runs at `http://localhost:5198` (Swagger: `http://localhost:5198/swagger`). Avoid the `https` profile: it redirects to a self-signed certificate that Postman and Android reject.
+
+### <a id="mobile-app"></a>Connecting the Mobile App (`kombinado-expo`)
+The API started by Docker Compose listens on all network interfaces, so the app can reach it. Set `EXPO_PUBLIC_API_URL` in the app's `.env`:
+* **Android emulator**: `http://10.0.2.2:8080`
+* **Physical device (same Wi-Fi)**: `http://<your-machine-LAN-IP>:8080`
+
+When using Option 2, start the API with `dotnet run --launch-profile http --urls "http://0.0.0.0:5198"` and use port `5198` instead.
 
 ---
 
@@ -561,7 +582,7 @@ erDiagram
 * **Ambiente de Execução**: [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (ASP.NET Core Web API)
 * **Mapeamento Objeto-Relacional**: [Entity Framework Core (EF Core)](https://learn.microsoft.com/en-us/ef/core/)
 * **Banco de Dados**: [PostgreSQL](https://www.postgresql.org/)
-* **Containers**: [Docker & Docker Compose](https://www.docker.com/) (gerenciando banco e pgAdmin local)
+* **Containers**: [Docker & Docker Compose](https://www.docker.com/) (sobe a API, o PostgreSQL e o pgAdmin com um único comando)
 * **Segurança e Login**: [JSON Web Tokens (JWT)](https://jwt.io/) com chaves simétricas e fluxo de Refresh Token rotativo.
 * **Interface Interativa**: Swagger UI/OpenAPI.
 
@@ -570,11 +591,14 @@ erDiagram
 ## <a id="pt-prerequisitos"></a>Pré-requisitos e Configuração
 
 Certifique-se de instalar as dependências locais:
-* **.NET 8 SDK** (incluindo a CLI global `dotnet ef`)
-* **Docker & Docker Compose**
+* **Docker & Docker Compose v2** (comando `docker compose`) — é tudo o que você precisa para rodar o projeto.
+* **.NET 8 SDK** e a CLI `dotnet ef` — necessários apenas para rodar/depurar a API fora do Docker ou criar novas migrações.
 
 ### Variáveis de Ambiente (.env)
-Adicione o arquivo `.env` na raiz física do repositório (diretório que contém `docker-compose.yml`):
+Copie o `.env.example` para `.env` na raiz do repositório (diretório que contém o `docker-compose.yaml`) e preencha os valores:
+```bash
+cp .env.example .env
+```
 
 ```env
 # 1. Credenciais do Banco PostgreSQL
@@ -586,7 +610,7 @@ POSTGRES_DB=kombinado_db
 PGADMIN_DEFAULT_EMAIL=admin@kombinado.com
 PGADMIN_DEFAULT_PASSWORD=admin
 
-# 3. Connection String Utilizada pela API
+# 3. Connection String (usada apenas ao rodar a API fora do Docker)
 CONNECTION_STRING=Host=localhost;Database=kombinado_db;Username=postgres;Password=postgres;Port=5432;
 
 # 4. Configurações de Assinatura do JWT
@@ -596,40 +620,58 @@ JWT_REFRESH_EXPIRE_DAYS=7
 JWT_ISSUER=Kombinado
 JWT_AUDIENCE=KombinadoApp
 ```
+* O `JWT_SECRET` precisa ter **no mínimo 32 caracteres**.
+* Dentro do Docker Compose, a API monta a própria connection string a partir das variáveis `POSTGRES_*` (apontando para o serviço `db`), então o `CONNECTION_STRING` só importa na [Opção 2](#pt-rodar-local).
+* Se faltar alguma variável obrigatória, o `docker compose` para antes de subir e informa qual é.
 
 ---
 
 ## <a id="pt-como-rodar"></a>Como Rodar o Projeto
 
-Siga este procedimento para subir e estruturar o projeto:
-
-### 1. Iniciar os Containers de Banco de Dados
-Na raiz física do projeto, inicialize os serviços no Docker:
+### Opção 1 — Docker Compose (recomendado)
+Um único comando gera a imagem da API, sobe o PostgreSQL e o pgAdmin, aguarda o banco ficar saudável e **aplica as migrações do EF Core automaticamente**:
 ```bash
-docker-compose up -d
-```
-*Isto ativará o PostgreSQL na porta `5432` e o pgAdmin na porta `5050`.*
-
-### 2. Acessar o Diretório da API
-```bash
-cd Kombinado.Api
+docker compose up -d --build
 ```
 
-### 3. Aplicar as Migrações do Banco
-Crie as tabelas e relacionamentos necessários no PostgreSQL utilizando as migrações automáticas:
-```bash
-dotnet ef database update
-```
+| Serviço | Endereço |
+|---|---|
+| API | `http://localhost:8080` |
+| Swagger UI | `http://localhost:8080/swagger` |
+| pgAdmin | `http://localhost:5050` |
+| PostgreSQL | `localhost:5432` |
 
-### 4. Rodar o Servidor Local
+Comandos úteis:
 ```bash
-dotnet run
+docker compose logs -f api      # acompanhar os logs da API
+docker compose up -d --build    # gerar a imagem da API de novo após alterar o código
+docker compose down             # parar tudo (os dados do banco são mantidos)
+docker compose down -v          # parar tudo e APAGAR o volume do banco
 ```
-A API iniciará no console informando as portas ativas (como `http://localhost:5000` ou `https://localhost:5001`).
+> Sem o `--build`, o Compose reaproveita a imagem gerada anteriormente — alterações no código só aparecem depois de gerar a imagem de novo.
 
-### 5. Acessar Swagger
-Consulte e realize chamadas dinâmicas na documentação web interativa:
-👉 `http://localhost:<PORTA>/swagger`
+### <a id="pt-rodar-local"></a>Opção 2 — API na sua máquina (depuração no Rider / VS Code)
+1. Suba apenas o banco:
+   ```bash
+   docker compose up -d db
+   ```
+2. Aplique as migrações. Rode **dentro de `Kombinado.Api/`**, pois a API carrega o `.env` do diretório pai:
+   ```bash
+   cd Kombinado.Api
+   dotnet ef database update
+   ```
+3. Inicie a API com o perfil **`http`** (no Rider, escolha a configuração de execução `http`):
+   ```bash
+   dotnet run --launch-profile http
+   ```
+   A API roda em `http://localhost:5198` (Swagger: `http://localhost:5198/swagger`). Evite o perfil `https`: ele redireciona para um certificado autoassinado que o Postman e o Android recusam.
+
+### <a id="pt-app-mobile"></a>Conectando o Aplicativo Mobile (`kombinado-expo`)
+A API iniciada pelo Docker Compose escuta em todas as interfaces de rede, então o app consegue acessá-la. Configure o `EXPO_PUBLIC_API_URL` no `.env` do app:
+* **Emulador Android**: `http://10.0.2.2:8080`
+* **Celular físico (mesma rede Wi-Fi)**: `http://<IP-da-sua-máquina-na-rede>:8080`
+
+Ao usar a Opção 2, inicie a API com `dotnet run --launch-profile http --urls "http://0.0.0.0:5198"` e use a porta `5198`.
 
 ---
 
