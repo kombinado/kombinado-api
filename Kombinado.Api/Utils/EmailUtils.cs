@@ -10,5 +10,11 @@ namespace Kombinado.Api.Utils
         {
             return Regex.IsMatch(email, STUDENT_EMAIL_REGEX);
         }
+
+        // Emails are stored and compared in a single canonical form (trimmed and lowercase)
+        public static string Normalize(string? email)
+        {
+            return email?.Trim().ToLowerInvariant() ?? string.Empty;
+        }
     }
 }
