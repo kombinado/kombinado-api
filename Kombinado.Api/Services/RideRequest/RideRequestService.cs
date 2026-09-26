@@ -27,11 +27,19 @@ public class RideRequestService : IRideRequestService
         if (ride.Status != RideStatus.Open || ride.AvailableSeats <= 0)
         {
             return ApiResponse<RideRequestResponseDto>.FailureResponse(
-                "Carona não está disponível para solicitações.", 
+                "Carona não está disponível para solicitações.",
                 400
             );
         }
-        
+
+        if (ride.DepartureTime <= DateTime.UtcNow)
+        {
+            return ApiResponse<RideRequestResponseDto>.FailureResponse(
+                "Esta carona já partiu.",
+                400
+            );
+        }
+
         if (ride.DriverId == passengerId)
         {
             return ApiResponse<RideRequestResponseDto>.FailureResponse(
@@ -40,11 +48,23 @@ public class RideRequestService : IRideRequestService
             );
         }
         
-        bool alreadyRequested = await _dbContext.RideRequests
-            .AnyAsync(rr => rr.RideId == rideId && 
-                            rr.PassengerId == passengerId && 
-                            rr.Status != RideRequestStatus.Rejected);
-        if (alreadyRequested)
+        // Cancelled requests don't block a new one; pending, accepted and rejected do
+        string? existingStatus = await _dbContext.RideRequests
+            .Where(rr => rr.RideId == rideId &&
+                         rr.PassengerId == passengerId &&
+                         rr.Status != RideRequestStatus.Cancelled)
+            .Select(rr => rr.Status)
+            .FirstOrDefaultAsync();
+
+        if (existingStatus == RideRequestStatus.Rejected)
+        {
+            return ApiResponse<RideRequestResponseDto>.FailureResponse(
+                "Sua solicitação para esta carona foi recusada pelo motorista.",
+                400
+            );
+        }
+
+        if (existingStatus != null)
         {
             return ApiResponse<RideRequestResponseDto>.FailureResponse(
                 "Você já solicitou uma vaga para esta carona.", 
@@ -209,7 +229,15 @@ public class RideRequestService : IRideRequestService
                     400
                 );
             }
-            
+
+            if (request.Ride.DepartureTime <= DateTime.UtcNow)
+            {
+                return ApiResponse<string>.FailureResponse(
+                    "Não é possível aceitar esta solicitação, pois a carona já partiu.",
+                    400
+                );
+            }
+
             request.Status = RideRequestStatus.Accepted;
             request.Ride.AvailableSeats -= 1;
             if (request.Ride.AvailableSeats == 0)

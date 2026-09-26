@@ -4,6 +4,7 @@ using Kombinado.Api.Models;
 using Kombinado.Api.Models.DTOs.Requests;
 using Kombinado.Api.Models.DTOs.Responses;
 using Kombinado.Api.Models.Entities;
+using Kombinado.Api.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kombinado.Api.Services.Ride;
@@ -18,24 +19,31 @@ public class RideService : IRideService
 
     public async Task<ApiResponse<RideResponseDto>> CreateRideAsync(CreateRideDto dto, Guid driverId)
     {
-        // 1. Create a ride
+        // 1. Normalize the departure time to UTC and reject past dates
+        DateTime departureTimeUtc = DateTimeUtils.ToUtc(dto.DepartureTime);
+        if (departureTimeUtc <= DateTime.UtcNow)
+        {
+            return ApiResponse<RideResponseDto>.FailureResponse("O horário de partida deve ser uma data futura.", 400);
+        }
+
+        // 2. Create a ride
         RideEntity newRide = new RideEntity
         {
             Id = Guid.NewGuid(),
             DriverId = driverId,
             Origin = dto.Origin,
             Destination = dto.Destination,
-            DepartureTime = dto.DepartureTime,
+            DepartureTime = departureTimeUtc,
             AvailableSeats = dto.TotalSeats,
             TotalSeats = dto.TotalSeats,
             Status = RideStatus.Open
         };
         
-        // 2. Save the ride in DB
+        // 3. Save the ride in DB
         _dbContext.Rides.Add(newRide);
         await _dbContext.SaveChangesAsync();
         
-        // 3. Return the Ride response
+        // 4. Return the Ride response
         RideResponseDto responseDto = new RideResponseDto
         {
             Id = newRide.Id,
@@ -54,7 +62,10 @@ public class RideService : IRideService
     {
         List<RideEntity> availableRides = await _dbContext.Rides
             .Include(r => r.Driver)
-            .Where(r => r.Status == RideStatus.Open && r.AvailableSeats > 0 && r.DriverId != currentUserId)
+            .Where(r => r.Status == RideStatus.Open &&
+                        r.AvailableSeats > 0 &&
+                        r.DepartureTime > DateTime.UtcNow &&
+                        r.DriverId != currentUserId)
             .OrderBy(r => r.DepartureTime)
             .ToListAsync();
         
@@ -116,7 +127,7 @@ public class RideService : IRideService
 
         if (ride.DriverId != driverId)
         {
-            return ApiResponse<string>.FailureResponse("Você não tem permissão para deletar esta carona.", 403);
+            return ApiResponse<string>.FailureResponse("Você não tem permissão para cancelar esta carona.", 403);
         }
         
         // Soft delete
@@ -136,6 +147,6 @@ public class RideService : IRideService
 
         await _dbContext.SaveChangesAsync();
         
-        return ApiResponse<string>.SuccessResponse("Carona deletada com sucesso.", null);
+        return ApiResponse<string>.SuccessResponse("Carona cancelada com sucesso.", null);
     }
 }
