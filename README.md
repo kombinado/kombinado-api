@@ -38,10 +38,12 @@ The platform defines two major user roles based on their registration profile:
 * **Passengers**: Authenticated users who can search for available rides, suggest meeting points, request seats, and track the status of their requests.
 
 ### Key Workflows:
-1. **Academic Onboarding**: Sign up using standard details. Users who intend to drive must register their vehicle model, color, and license plate.
-2. **Ride Creation**: Drivers register a ride with available seats. The system initializes the ride status to **Open ("Aberta")**.
-3. **Seat Request**: Passengers browse available rides and request a seat. A request is created in **Pending ("Pendente")** status.
-4. **Approval Cycle**: The driver views pending requests for their ride and responds. 
+1. **Academic Onboarding**: Sign up using standard details. Users who intend to drive must register their vehicle model, color, and license plate. E-mails are case-insensitive: they are stored trimmed and in lowercase, so `Alex@...` and `alex@...` are the same account.
+2. **Ride Creation**: Drivers register a ride with available seats and a **future** departure time. The system initializes the ride status to **Open ("Aberta")**. See [Departure time rules](#departure-time-rules).
+3. **Seat Request**: Passengers browse available rides (only rides that have not departed yet) and request a seat. A request is created in **Pending ("Pendente")** status.
+   - A passenger who **canceled** their request can request a seat on the same ride again.
+   - A passenger whose request was **rejected** cannot request a seat on the same ride again.
+4. **Approval Cycle**: The driver views pending requests for their ride and responds. Requests can no longer be accepted once the ride has departed.
    - If accepted, the ride's available seats counter decrements. If available seats reach zero, the ride status auto-advances to **Full ("Lotada")**.
    - If rejected, the request status is updated to **Rejected ("Recusada")**, and the passenger is notified via the API status.
 5. **Ride & Request Cancellation**: 
@@ -223,18 +225,14 @@ Registers a new passenger or driver account.
   }
   ```
   *(Note: Vehicle details are optional but required if `isDriver` is set to `true`).*
-* **Response (Success `201 OK`)**:
+  *(Note: The e-mail is trimmed and converted to lowercase before validation and storage; login accepts any casing).*
+* **Response (Success `200 OK`)**: No tokens are returned — call the login endpoint afterwards.
   ```json
   {
     "success": true,
-    "message": "User registered successfully.",
-    "data": {
-      "accessToken": "eyJhbGciOi...",
-      "refreshToken": "7c9f8d...",
-      "name": "Alex Smith",
-      "isDriver": true
-    },
-    "statusCode": 201
+    "message": "Cadastro realizado com sucesso!",
+    "data": null,
+    "statusCode": 200
   }
   ```
 
@@ -272,10 +270,19 @@ These endpoints manage ride postings and require `Authorization: Bearer <token>`
   {
     "origin": "Main Campus - Gate A",
     "destination": "Downtown Terminal",
-    "departureTime": "2026-06-01T18:30:00Z",
+    "departureTime": "2026-06-01T15:30:00",
     "totalSeats": 4
   }
   ```
+* <a id="departure-time-rules"></a>**Departure time rules**:
+  | Format sent | How it is interpreted |
+  |---|---|
+  | No offset — `"2026-06-01T15:30:00"` | **Brasília time** (`America/Sao_Paulo`), converted to UTC |
+  | With offset — `"2026-06-01T15:30:00-03:00"` | Converted to UTC using the given offset |
+  | UTC — `"2026-06-01T18:30:00Z"` | Stored as is |
+
+  The departure time is always stored and **returned in UTC** (`Z` suffix) — clients must convert it to local time for display. The three examples above represent the same instant.
+* **Errors**: `400` — `"O horário de partida deve ser uma data futura."` when the departure time is not in the future.
 * **Response (Success `201 Created`)**:
   ```json
   {
@@ -296,7 +303,7 @@ These endpoints manage ride postings and require `Authorization: Bearer <token>`
 
 #### Get Available Rides (`GET /api/Rides`)
 *🔒 **Requires Authenticated User***
-Lists all rides in **Open ("Aberta")** status, excluding rides offered by the active user.
+Lists all rides in **Open ("Aberta")** status with available seats and a departure time still in the future, excluding rides offered by the active user.
 * **Response (Success `200 OK`)**:
   ```json
   {
@@ -352,6 +359,17 @@ Allows a passenger to request a seat on a ride.
     "meetingPointSuggestion": "In front of the library building"
   }
   ```
+* **Business rules / Errors** (`400` unless noted):
+  | Situation | Message |
+  |---|---|
+  | Ride not found (`404`) | `"Carona não encontrada."` |
+  | Ride is not open or has no seats | `"Carona não está disponível para solicitações."` |
+  | Ride has already departed | `"Esta carona já partiu."` |
+  | Passenger is the ride's driver | `"Você não pode solicitar vaga em sua própria carona."` |
+  | Passenger has a **pending** or **accepted** request for this ride | `"Você já solicitou uma vaga para esta carona."` |
+  | Passenger's request for this ride was **rejected** | `"Sua solicitação para esta carona foi recusada pelo motorista."` |
+
+  A previously **canceled** request does not block a new one.
 * **Response (Success `200 OK`)**:
   ```json
   {
@@ -433,6 +451,7 @@ Allows a driver to accept or decline a passenger's seat booking request.
   }
   ```
   *(Status transitions to `"Aceita"` if accepted, or `"Recusada"` if `accept` is false).*
+* **Errors**: `400` — `"Não é possível aceitar esta solicitação, pois a carona já partiu."` when accepting a request after the ride's departure time. Rejecting is still allowed.
 
 ---
 
@@ -462,10 +481,12 @@ O sistema reconhece dois perfis de usuários devidamente autenticados:
 * **Passageiros**: Usuários que pesquisam caronas ativas que atendam aos seus destinos, solicitam reservas, propõem pontos de encontro e acompanham o status das suas solicitações.
 
 ### Ciclo Operacional:
-1. **Cadastro Completo**: Criação da conta com curso acadêmico e contato telefônico. Perfis de motoristas incluem dados detalhados da placa e modelo do veículo.
-2. **Postagem de Carona**: Um motorista cria uma carona com assentos vagos. O sistema cria a viagem sob o estado **Aberta**.
-3. **Solicitação de Assento**: Um passageiro localiza a carona e submete uma solicitação de reserva informando sugestões de embarque. O pedido entra em status **Pendente**.
-4. **Avaliação do Motorista**: O motorista analisa a solicitação pendente através da API:
+1. **Cadastro Completo**: Criação da conta com curso acadêmico e contato telefônico. Perfis de motoristas incluem dados detalhados da placa e modelo do veículo. O e-mail não diferencia maiúsculas de minúsculas: ele é salvo sem espaços e em minúsculas, então `Maria@...` e `maria@...` são a mesma conta.
+2. **Postagem de Carona**: Um motorista cria uma carona com assentos vagos e horário de partida **no futuro**. O sistema cria a viagem sob o estado **Aberta**. Veja as [regras do horário de partida](#pt-regras-horario).
+3. **Solicitação de Assento**: Um passageiro localiza a carona (apenas caronas que ainda não partiram aparecem) e submete uma solicitação de reserva informando sugestões de embarque. O pedido entra em status **Pendente**.
+   - Quem **cancelou** a própria solicitação pode solicitar vaga novamente na mesma carona.
+   - Quem teve a solicitação **recusada** não pode solicitar vaga novamente na mesma carona.
+4. **Avaliação do Motorista**: O motorista analisa a solicitação pendente através da API (não é possível aceitar solicitações depois que a carona partiu):
    - Se **Aceitar**, a vaga é reservada e o número de assentos disponíveis da carona diminui. Caso as vagas cheguem a zero, o status da carona muda para **Lotada**.
    - Se **Recusar**, o status da solicitação atualiza para **Recusada**, permitindo ao passageiro buscar outras opções.
 5. **Políticas de Cancelamento**:
@@ -647,18 +668,14 @@ Criação de novos registros para passageiros ou motoristas.
   }
   ```
   *(Nota: Atributos do veículo são opcionais, exceto se `isDriver` for definido como `true`).*
-* **Resposta de Sucesso (`201 OK`)**:
+  *(Nota: O e-mail é convertido para minúsculas e sem espaços antes da validação e do armazenamento; o login aceita qualquer combinação de maiúsculas/minúsculas).*
+* **Resposta de Sucesso (`200 OK`)**: Não retorna tokens — chame o endpoint de login em seguida.
   ```json
   {
     "success": true,
-    "message": "Usuário registrado com sucesso.",
-    "data": {
-      "accessToken": "eyJhbGciOi...",
-      "refreshToken": "7c9f8d...",
-      "name": "Maria Silva",
-      "isDriver": true
-    },
-    "statusCode": 201
+    "message": "Cadastro realizado com sucesso!",
+    "data": null,
+    "statusCode": 200
   }
   ```
 
@@ -696,10 +713,19 @@ Controle das ofertas de trajetos rodoviários. Exige cabeçalho `Authorization: 
   {
     "origin": "Portaria Principal - Bloco A",
     "destination": "Terminal Central",
-    "departureTime": "2026-06-01T18:30:00Z",
+    "departureTime": "2026-06-01T15:30:00",
     "totalSeats": 4
   }
   ```
+* <a id="pt-regras-horario"></a>**Regras do horário de partida**:
+  | Formato enviado | Como é interpretado |
+  |---|---|
+  | Sem fuso — `"2026-06-01T15:30:00"` | **Horário de Brasília** (`America/Sao_Paulo`), convertido para UTC |
+  | Com fuso — `"2026-06-01T15:30:00-03:00"` | Convertido para UTC usando o fuso informado |
+  | UTC — `"2026-06-01T18:30:00Z"` | Salvo como está |
+
+  O horário é sempre armazenado e **retornado em UTC** (sufixo `Z`) — o cliente deve convertê-lo para o horário local ao exibir. Os três exemplos acima representam o mesmo instante.
+* **Erros**: `400` — `"O horário de partida deve ser uma data futura."` quando o horário de partida não está no futuro.
 * **Resposta de Sucesso (`201 Created`)**:
   ```json
   {
@@ -720,7 +746,7 @@ Controle das ofertas de trajetos rodoviários. Exige cabeçalho `Authorization: 
 
 #### Listar Caronas Disponíveis (`GET /api/Rides`)
 *🔒 **Qualquer Usuário Autenticado***
-Retorna todas as ofertas ativas no estado **Aberta**, ignorando caronas criadas pelo próprio solicitante.
+Retorna todas as ofertas no estado **Aberta**, com vagas disponíveis e horário de partida ainda no futuro, ignorando caronas criadas pelo próprio solicitante.
 * **Resposta de Sucesso (`200 OK`)**:
   ```json
   {
@@ -776,6 +802,17 @@ Cria um pedido pendente de assento na carona informada.
     "meetingPointSuggestion": "Em frente à biblioteca central"
   }
   ```
+* **Regras de negócio / Erros** (`400`, salvo indicação):
+  | Situação | Mensagem |
+  |---|---|
+  | Carona inexistente (`404`) | `"Carona não encontrada."` |
+  | Carona não está aberta ou não tem vagas | `"Carona não está disponível para solicitações."` |
+  | Carona já partiu | `"Esta carona já partiu."` |
+  | Passageiro é o motorista da carona | `"Você não pode solicitar vaga em sua própria carona."` |
+  | Passageiro já tem solicitação **pendente** ou **aceita** nesta carona | `"Você já solicitou uma vaga para esta carona."` |
+  | Solicitação do passageiro nesta carona foi **recusada** | `"Sua solicitação para esta carona foi recusada pelo motorista."` |
+
+  Uma solicitação **cancelada** anteriormente não impede um novo pedido.
 * **Resposta de Sucesso (`200 OK`)**:
   ```json
   {
@@ -857,5 +894,6 @@ Deferimento (Aceite ou Recusa) de reservas sob a ótica do motorista.
   }
   ```
   *(Status transita para `"Aceita"` ou `"Recusada"`, conforme o campo `accept`).*
+* **Erros**: `400` — `"Não é possível aceitar esta solicitação, pois a carona já partiu."` ao tentar aceitar depois do horário de partida. Recusar continua permitido.
 
 </details>
