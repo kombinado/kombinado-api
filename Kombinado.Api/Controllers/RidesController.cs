@@ -63,7 +63,7 @@ namespace Kombinado.Api.Controllers
         
         [HttpPatch("{rideId}/cancel")]
         [Authorize("DriverOnly")]
-        public async Task<IActionResult> DeleteRide(Guid rideId)
+        public async Task<IActionResult> CancelRide(Guid rideId)
         {
             Guid driverId = User.GetUserId();
             

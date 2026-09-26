@@ -127,7 +127,7 @@ public class RideService : IRideService
 
         if (ride.DriverId != driverId)
         {
-            return ApiResponse<string>.FailureResponse("Você não tem permissão para deletar esta carona.", 403);
+            return ApiResponse<string>.FailureResponse("Você não tem permissão para cancelar esta carona.", 403);
         }
         
         // Soft delete
@@ -147,6 +147,6 @@ public class RideService : IRideService
 
         await _dbContext.SaveChangesAsync();
         
-        return ApiResponse<string>.SuccessResponse("Carona deletada com sucesso.", null);
+        return ApiResponse<string>.SuccessResponse("Carona cancelada com sucesso.", null);
     }
 }
