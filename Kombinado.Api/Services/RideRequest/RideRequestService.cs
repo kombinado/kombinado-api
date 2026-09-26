@@ -27,11 +27,19 @@ public class RideRequestService : IRideRequestService
         if (ride.Status != RideStatus.Open || ride.AvailableSeats <= 0)
         {
             return ApiResponse<RideRequestResponseDto>.FailureResponse(
-                "Carona não está disponível para solicitações.", 
+                "Carona não está disponível para solicitações.",
                 400
             );
         }
-        
+
+        if (ride.DepartureTime <= DateTime.UtcNow)
+        {
+            return ApiResponse<RideRequestResponseDto>.FailureResponse(
+                "Esta carona já partiu.",
+                400
+            );
+        }
+
         if (ride.DriverId == passengerId)
         {
             return ApiResponse<RideRequestResponseDto>.FailureResponse(
@@ -221,7 +229,15 @@ public class RideRequestService : IRideRequestService
                     400
                 );
             }
-            
+
+            if (request.Ride.DepartureTime <= DateTime.UtcNow)
+            {
+                return ApiResponse<string>.FailureResponse(
+                    "Não é possível aceitar esta solicitação, pois a carona já partiu.",
+                    400
+                );
+            }
+
             request.Status = RideRequestStatus.Accepted;
             request.Ride.AvailableSeats -= 1;
             if (request.Ride.AvailableSeats == 0)

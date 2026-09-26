@@ -62,7 +62,10 @@ public class RideService : IRideService
     {
         List<RideEntity> availableRides = await _dbContext.Rides
             .Include(r => r.Driver)
-            .Where(r => r.Status == RideStatus.Open && r.AvailableSeats > 0 && r.DriverId != currentUserId)
+            .Where(r => r.Status == RideStatus.Open &&
+                        r.AvailableSeats > 0 &&
+                        r.DepartureTime > DateTime.UtcNow &&
+                        r.DriverId != currentUserId)
             .OrderBy(r => r.DepartureTime)
             .ToListAsync();
         
