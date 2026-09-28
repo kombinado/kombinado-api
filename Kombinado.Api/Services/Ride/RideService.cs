@@ -26,6 +26,16 @@ public class RideService : IRideService
             return ApiResponse<RideResponseDto>.FailureResponse("O horário de partida deve ser uma data futura.", 400);
         }
 
+        string? driverName = await _dbContext.Users
+            .Where(u => u.Id == driverId)
+            .Select(u => u.Name)
+            .FirstOrDefaultAsync();
+
+        if (driverName == null)
+        {
+            return ApiResponse<RideResponseDto>.FailureResponse("Motorista não encontrado.", 404);
+        }
+
         // 2. Create a ride
         RideEntity newRide = new RideEntity
         {
@@ -47,6 +57,7 @@ public class RideService : IRideService
         RideResponseDto responseDto = new RideResponseDto
         {
             Id = newRide.Id,
+            DriverName = driverName,
             Origin = newRide.Origin,
             Destination = newRide.Destination,
             DepartureTime = newRide.DepartureTime,
@@ -72,6 +83,7 @@ public class RideService : IRideService
         List<RideResponseDto> responseDtos = availableRides.Select(r => new RideResponseDto
         {
             Id = r.Id,
+            DriverName = r.Driver.Name,
             Origin = r.Origin,
             Destination = r.Destination,
             DepartureTime = r.DepartureTime,
@@ -92,6 +104,7 @@ public class RideService : IRideService
     public async Task<ApiResponse<IEnumerable<RideResponseDto>>> GetMyDrivingRidesAsync(Guid driverId)
     {
         List<RideEntity> rides = await _dbContext.Rides
+            .Include(r => r.Driver)
             .Include(r => r.Requests)
             .Where(r => r.DriverId == driverId)
             .ToListAsync();
@@ -99,6 +112,7 @@ public class RideService : IRideService
         List<RideResponseDto> responseDtos = rides.Select(r => new RideResponseDto
         {
             Id = r.Id,
+            DriverName = r.Driver.Name,
             Origin = r.Origin,
             Destination = r.Destination,
             DepartureTime = r.DepartureTime,
