@@ -5,6 +5,7 @@ namespace Kombinado.Api.Models.DTOs.Responses;
 public class RideResponseDto
 {
     public Guid Id { get; set; }
+    public string DriverName { get; set; } = string.Empty;
     public string Origin { get; set; } = string.Empty;
     public string Destination { get; set; } = string.Empty;
     public DateTime DepartureTime { get; set; }
