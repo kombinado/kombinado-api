@@ -284,6 +284,8 @@ Issues a new JWT Access Token when expired by providing a valid Refresh Token.
 ### <a id="rides-domain"></a>2. Rides Domain (`api/Rides`)
 These endpoints manage ride postings and require `Authorization: Bearer <token>`. Driver-exclusive endpoints validate the claims via a policy.
 
+`RideResponseDto` includes `driverName` (string): the driver's name from their user record. It is populated in `POST /api/Rides`, `GET /api/Rides` and `GET /api/Rides/me/driving`. This is a response-only field; clients do not send it when creating a ride.
+
 #### Create a Ride (`POST /api/Rides`)
 *🔒 **Requires Driver Role (`DriverOnly` Policy)***
 * **Payload Structure (`CreateRideDto`)**:
@@ -304,6 +306,7 @@ These endpoints manage ride postings and require `Authorization: Bearer <token>`
 
   The departure time is always stored and **returned in UTC** (`Z` suffix) — clients must convert it to local time for display. The three examples above represent the same instant.
 * **Errors**: `400` — `"O horário de partida deve ser uma data futura."` when the departure time is not in the future.
+  `404` — `"Motorista não encontrado."` when the authenticated user no longer exists in the database.
 * **Response (Success `201 Created`)**:
   ```json
   {
@@ -311,6 +314,7 @@ These endpoints manage ride postings and require `Authorization: Bearer <token>`
     "message": "Ride created successfully.",
     "data": {
       "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+      "driverName": "Jane Doe",
       "origin": "Main Campus - Gate A",
       "destination": "Downtown Terminal",
       "departureTime": "2026-06-01T18:30:00Z",
@@ -333,6 +337,7 @@ Lists all rides in **Open ("Aberta")** status with available seats and a departu
     "data": [
       {
         "id": "a1b2c3d4-e5f6-...",
+        "driverName": "Jane Doe",
         "origin": "Main Campus",
         "destination": "Downtown",
         "departureTime": "2026-06-01T18:30:00Z",
@@ -351,6 +356,7 @@ Lists all rides in **Open ("Aberta")** status with available seats and a departu
 #### Get My Offered Rides (`GET /api/Rides/me/driving`)
 *🔒 **Requires Driver Role (`DriverOnly` Policy)***
 Lists all rides offered by the logged-in driver.
+Each ride includes `driverName`, containing the logged-in driver's registered name.
 * **Response (Success `200 OK`)**: Same payload format as `GET /api/Rides`.
 
 #### Cancel a Ride (`PATCH /api/Rides/{rideId}/cancel`)
@@ -748,6 +754,8 @@ Obtém um novo token de acesso (JWT) fornecendo um token de refresh válido.
 ### Domínio de Caronas (`api/Rides`)
 Controle das ofertas de trajetos rodoviários. Exige cabeçalho `Authorization: Bearer <token>`. Ações exclusivas de motoristas validam a política de acesso correspondente.
 
+O `RideResponseDto` inclui `driverName` (string): o nome do motorista no cadastro de usuário. Ele é preenchido em `POST /api/Rides`, `GET /api/Rides` e `GET /api/Rides/me/driving`. É um campo exclusivo da resposta; o cliente não o envia ao criar uma carona.
+
 #### Cadastrar Oferta de Carona (`POST /api/Rides`)
 *🔒 **Apenas Motoristas (`DriverOnly` Policy)***
 * **Corpo da Requisição (`CreateRideDto`)**:
@@ -768,6 +776,7 @@ Controle das ofertas de trajetos rodoviários. Exige cabeçalho `Authorization: 
 
   O horário é sempre armazenado e **retornado em UTC** (sufixo `Z`) — o cliente deve convertê-lo para o horário local ao exibir. Os três exemplos acima representam o mesmo instante.
 * **Erros**: `400` — `"O horário de partida deve ser uma data futura."` quando o horário de partida não está no futuro.
+  `404` — `"Motorista não encontrado."` quando o usuário autenticado não existe mais no banco.
 * **Resposta de Sucesso (`201 Created`)**:
   ```json
   {
@@ -775,6 +784,7 @@ Controle das ofertas de trajetos rodoviários. Exige cabeçalho `Authorization: 
     "message": "Carona criada com sucesso.",
     "data": {
       "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+      "driverName": "Maria Silva",
       "origin": "Portaria Principal - Bloco A",
       "destination": "Terminal Central",
       "departureTime": "2026-06-01T18:30:00Z",
@@ -797,6 +807,7 @@ Retorna todas as ofertas no estado **Aberta**, com vagas disponíveis e horário
     "data": [
       {
         "id": "a1b2c3d4-e5f6-...",
+        "driverName": "Maria Silva",
         "origin": "Portaria Principal - Bloco A",
         "destination": "Terminal Central",
         "departureTime": "2026-06-01T18:30:00Z",
@@ -815,6 +826,7 @@ Retorna todas as ofertas no estado **Aberta**, com vagas disponíveis e horário
 #### Minhas Caronas Oferecidas (`GET /api/Rides/me/driving`)
 *🔒 **Apenas Motoristas (`DriverOnly` Policy)***
 Lista os cadastros de carona vinculados ao motorista ativo.
+Cada carona inclui `driverName`, com o nome cadastrado do motorista autenticado.
 * **Resposta de Sucesso (`200 OK`)**: Retorna lista de caronas estruturada no mesmo envelope.
 
 #### Cancelar uma Carona (`PATCH /api/Rides/{rideId}/cancel`)
