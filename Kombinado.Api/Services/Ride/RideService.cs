@@ -26,17 +26,32 @@ public class RideService : IRideService
             return ApiResponse<RideResponseDto>.FailureResponse("O horário de partida deve ser uma data futura.", 400);
         }
 
-        string? driverName = await _dbContext.Users
+        // 2. Check the offered seats against the driver's vehicle capacity
+        var driver = await _dbContext.Users
             .Where(u => u.Id == driverId)
-            .Select(u => u.Name)
+            .Select(u => new { u.Name, u.VehicleTotalSeats })
             .FirstOrDefaultAsync();
 
-        if (driverName == null)
+        if (driver == null)
         {
             return ApiResponse<RideResponseDto>.FailureResponse("Motorista não encontrado.", 404);
         }
 
-        // 2. Create a ride
+        if (dto.TotalSeats < VehicleUtils.MIN_TOTAL_SEATS)
+        {
+            return ApiResponse<RideResponseDto>.FailureResponse("A carona deve oferecer pelo menos 1 vaga.", 400);
+        }
+
+        // Drivers registered before VehicleTotalSeats existed have no capacity to compare against
+        if (driver.VehicleTotalSeats != null && dto.TotalSeats > driver.VehicleTotalSeats)
+        {
+            return ApiResponse<RideResponseDto>.FailureResponse(
+                $"A carona não pode oferecer mais vagas do que o seu veículo possui ({driver.VehicleTotalSeats}).",
+                400
+            );
+        }
+
+        // 3. Create a ride
         RideEntity newRide = new RideEntity
         {
             Id = Guid.NewGuid(),
@@ -49,15 +64,15 @@ public class RideService : IRideService
             Status = RideStatus.Open
         };
         
-        // 3. Save the ride in DB
+        // 4. Save the ride in DB
         _dbContext.Rides.Add(newRide);
         await _dbContext.SaveChangesAsync();
         
-        // 4. Return the Ride response
+        // 5. Return the Ride response
         RideResponseDto responseDto = new RideResponseDto
         {
             Id = newRide.Id,
-            DriverName = driverName,
+            DriverName = driver.Name,
             Origin = newRide.Origin,
             Destination = newRide.Destination,
             DepartureTime = newRide.DepartureTime,
