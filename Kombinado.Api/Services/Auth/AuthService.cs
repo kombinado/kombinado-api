@@ -44,6 +44,14 @@ namespace Kombinado.Api.Services.Auth
                 {
                     return ApiResponse<string>.FailureResponse("Motoristas precisam informar o Modelo, Cor e Placa do veículo.", 400);
                 }
+
+                if (!VehicleUtils.IsValidTotalSeats(request.VehicleTotalSeats))
+                {
+                    return ApiResponse<string>.FailureResponse(
+                        $"O número de vagas do veículo deve ser entre {VehicleUtils.MIN_TOTAL_SEATS} e {VehicleUtils.MAX_TOTAL_SEATS}.",
+                        400
+                    );
+                }
             }
 
             // 3. Check if email is already registered
@@ -76,7 +84,8 @@ namespace Kombinado.Api.Services.Auth
                 IsDriver = request.IsDriver,
                 VehicleModel = request.IsDriver ? request.VehicleModel : null,
                 VehicleColor = request.IsDriver ? request.VehicleColor : null,
-                VehiclePlate = request.IsDriver ? request.VehiclePlate : null
+                VehiclePlate = request.IsDriver ? request.VehiclePlate : null,
+                VehicleTotalSeats = request.IsDriver ? request.VehicleTotalSeats : null
             };
 
             _dbContext.Users.Add(user);
@@ -189,6 +198,7 @@ namespace Kombinado.Api.Services.Auth
                     VehicleModel = u.VehicleModel,
                     VehicleColor = u.VehicleColor,
                     VehiclePlate = u.VehiclePlate,
+                    VehicleTotalSeats = u.VehicleTotalSeats,
                     Course = u.Course,
                     WhatsApp = u.WhatsApp
                 })
