@@ -189,6 +189,7 @@ namespace Kombinado.Api.Services.Auth
                     VehicleModel = u.VehicleModel,
                     VehicleColor = u.VehicleColor,
                     VehiclePlate = u.VehiclePlate,
+                    VehicleTotalSeats = u.VehicleTotalSeats,
                     Course = u.Course,
                     WhatsApp = u.WhatsApp
                 })

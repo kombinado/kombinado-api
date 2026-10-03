@@ -13,4 +13,5 @@ public class UserResponseDto
     public string? VehicleModel { get; set; }
     public string? VehicleColor { get; set; }
     public string? VehiclePlate { get; set; }
+    public int? VehicleTotalSeats { get; set; }
 }
