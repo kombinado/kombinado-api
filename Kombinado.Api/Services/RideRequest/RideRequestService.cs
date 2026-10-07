@@ -10,6 +10,9 @@ namespace Kombinado.Api.Services.RideRequest;
 
 public class RideRequestService : IRideRequestService
 {
+    // Same limit as the MeetingPointSuggestion column (KombinadoDbContext)
+    private const int MAX_MEETING_POINT_LENGTH = 250;
+
     private readonly KombinadoDbContext _dbContext;
     public RideRequestService(KombinadoDbContext dbContext)
     {
@@ -18,6 +21,16 @@ public class RideRequestService : IRideRequestService
 
     public async Task<ApiResponse<RideRequestResponseDto>> RequestSeatAsync(Guid rideId, Guid passengerId, CreateRideRequestDto dto)
     {
+        // The meeting point is optional: blank suggestions are stored as null
+        dto.MeetingPointSuggestion = string.IsNullOrWhiteSpace(dto.MeetingPointSuggestion) ? null : dto.MeetingPointSuggestion.Trim();
+        if (dto.MeetingPointSuggestion?.Length > MAX_MEETING_POINT_LENGTH)
+        {
+            return ApiResponse<RideRequestResponseDto>.FailureResponse(
+                $"A sugestão de ponto de encontro deve ter no máximo {MAX_MEETING_POINT_LENGTH} caracteres.",
+                400
+            );
+        }
+
         RideEntity? ride = await _dbContext.Rides.FirstOrDefaultAsync(r => r.Id == rideId);
         if (ride == null)
         {

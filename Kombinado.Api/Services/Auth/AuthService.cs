@@ -7,6 +7,7 @@ using Kombinado.Api.Models.Entities;
 using Kombinado.Api.Services.Token;
 using Kombinado.Api.Utils;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -35,23 +36,22 @@ namespace Kombinado.Api.Services.Auth
                 return ApiResponse<string>.FailureResponse("É necessário um e-mail institucional do IFTM (@estudante.iftm.edu.br).", 400);
             }
 
-            // 2. If user is a driver, check if vehicle info is provided
-            if (request.IsDriver)
-            {
-                if (string.IsNullOrWhiteSpace(request.VehicleModel) ||
-                    string.IsNullOrWhiteSpace(request.VehicleColor) ||
-                    string.IsNullOrWhiteSpace(request.VehiclePlate))
-                {
-                    return ApiResponse<string>.FailureResponse("Motoristas precisam informar o Modelo, Cor e Placa do veículo.", 400);
-                }
+            // 2. Normalize and validate personal data (and vehicle data if user is a driver)
+            request.Name = request.Name?.Trim() ?? string.Empty;
+            request.Course = request.Course?.Trim() ?? string.Empty;
+            request.WhatsApp = PhoneUtils.NormalizeWhatsApp(request.WhatsApp);
+            request.VehicleModel = request.VehicleModel?.Trim();
+            request.VehicleColor = request.VehicleColor?.Trim();
+            request.VehiclePlate = VehicleUtils.NormalizePlate(request.VehiclePlate);
 
-                if (!VehicleUtils.IsValidTotalSeats(request.VehicleTotalSeats))
-                {
-                    return ApiResponse<string>.FailureResponse(
-                        $"O número de vagas do veículo deve ser entre {VehicleUtils.MIN_TOTAL_SEATS} e {VehicleUtils.MAX_TOTAL_SEATS}.",
-                        400
-                    );
-                }
+            string? validationError =
+                UserValidationUtils.ValidatePersonalData(request.Name, request.WhatsApp, request.Course) ??
+                (request.IsDriver
+                    ? UserValidationUtils.ValidateVehicleData(request.VehicleModel, request.VehicleColor, request.VehiclePlate, request.VehicleTotalSeats)
+                    : null);
+            if (validationError != null)
+            {
+                return ApiResponse<string>.FailureResponse(validationError, 400);
             }
 
             // 3. Check if email is already registered
@@ -136,8 +136,16 @@ namespace Kombinado.Api.Services.Auth
 
         public async Task<ApiResponse<LoginResponseDto>> RefreshTokenAsync(RefreshTokenRequestDto request)
         {
-            // 1. Get claims from the expired access token
-            ClaimsPrincipal principal = _tokenService.GetPrincipalFromExpiredToken(request.AccessToken);
+            // 1. Get claims from the expired access token (malformed or tampered tokens are rejected as 401)
+            ClaimsPrincipal principal;
+            try
+            {
+                principal = _tokenService.GetPrincipalFromExpiredToken(request.AccessToken);
+            }
+            catch (Exception ex) when (ex is SecurityTokenException or ArgumentException)
+            {
+                return ApiResponse<LoginResponseDto>.FailureResponse("Sessão expirada. Por favor, faça login novamente.", 401);
+            }
 
             // Get the email claim
             string? email = principal.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Email)?.Value;

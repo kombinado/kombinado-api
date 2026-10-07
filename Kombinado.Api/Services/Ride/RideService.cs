@@ -11,6 +11,9 @@ namespace Kombinado.Api.Services.Ride;
 
 public class RideService : IRideService
 {
+    // Same limit as the Origin/Destination columns (KombinadoDbContext)
+    private const int MAX_LOCATION_LENGTH = 200;
+
     private readonly KombinadoDbContext _dbContext;
     public RideService(KombinadoDbContext dbContext)
     {
@@ -19,11 +22,15 @@ public class RideService : IRideService
 
     public async Task<ApiResponse<RideResponseDto>> CreateRideAsync(CreateRideDto dto, Guid driverId)
     {
-        // 1. Normalize the departure time to UTC and reject past dates
+        // 1. Normalize and validate the input before touching the database
+        dto.Origin = dto.Origin?.Trim() ?? string.Empty;
+        dto.Destination = dto.Destination?.Trim() ?? string.Empty;
         DateTime departureTimeUtc = DateTimeUtils.ToUtc(dto.DepartureTime);
-        if (departureTimeUtc <= DateTime.UtcNow)
+
+        string? validationError = ValidateRideData(dto, departureTimeUtc);
+        if (validationError != null)
         {
-            return ApiResponse<RideResponseDto>.FailureResponse("O horário de partida deve ser uma data futura.", 400);
+            return ApiResponse<RideResponseDto>.FailureResponse(validationError, 400);
         }
 
         // 2. Check the offered seats against the driver's vehicle capacity
@@ -37,12 +44,7 @@ public class RideService : IRideService
             return ApiResponse<RideResponseDto>.FailureResponse("Motorista não encontrado.", 404);
         }
 
-        if (dto.TotalSeats < VehicleUtils.MIN_TOTAL_SEATS)
-        {
-            return ApiResponse<RideResponseDto>.FailureResponse("A carona deve oferecer pelo menos 1 vaga.", 400);
-        }
-
-        // Drivers registered before VehicleTotalSeats existed have no capacity to compare against
+        // Drivers registered before VehicleTotalSeats existed are only limited by MAX_TOTAL_SEATS
         if (driver.VehicleTotalSeats != null && dto.TotalSeats > driver.VehicleTotalSeats)
         {
             return ApiResponse<RideResponseDto>.FailureResponse(
@@ -82,6 +84,36 @@ public class RideService : IRideService
         };
         
         return ApiResponse<RideResponseDto>.SuccessResponse("Carona criada com sucesso.", responseDto);
+    }
+
+    private static string? ValidateRideData(CreateRideDto dto, DateTime departureTimeUtc)
+    {
+        if (string.IsNullOrEmpty(dto.Origin) || string.IsNullOrEmpty(dto.Destination))
+        {
+            return "Informe a origem e o destino da carona.";
+        }
+
+        if (dto.Origin.Length > MAX_LOCATION_LENGTH || dto.Destination.Length > MAX_LOCATION_LENGTH)
+        {
+            return $"A origem e o destino devem ter no máximo {MAX_LOCATION_LENGTH} caracteres.";
+        }
+
+        if (string.Equals(dto.Origin, dto.Destination, StringComparison.OrdinalIgnoreCase))
+        {
+            return "A origem e o destino devem ser diferentes.";
+        }
+
+        if (departureTimeUtc <= DateTime.UtcNow)
+        {
+            return "O horário de partida deve ser uma data futura.";
+        }
+
+        if (dto.TotalSeats < VehicleUtils.MIN_TOTAL_SEATS || dto.TotalSeats > VehicleUtils.MAX_TOTAL_SEATS)
+        {
+            return $"A carona deve oferecer entre {VehicleUtils.MIN_TOTAL_SEATS} e {VehicleUtils.MAX_TOTAL_SEATS} vagas.";
+        }
+
+        return null;
     }
 
     public async Task<ApiResponse<IEnumerable<RideResponseDto>>> GetAvailableRidesAsync(Guid currentUserId)

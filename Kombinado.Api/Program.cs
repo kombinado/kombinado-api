@@ -40,7 +40,7 @@ builder.Services.AddCustomPolicies();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddControllers();
+builder.Services.AddControllersWithApiResponse();
 
 WebApplication app = builder.Build();
 
