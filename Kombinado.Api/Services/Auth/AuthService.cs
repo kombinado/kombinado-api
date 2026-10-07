@@ -7,6 +7,7 @@ using Kombinado.Api.Models.Entities;
 using Kombinado.Api.Services.Token;
 using Kombinado.Api.Utils;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -136,8 +137,16 @@ namespace Kombinado.Api.Services.Auth
 
         public async Task<ApiResponse<LoginResponseDto>> RefreshTokenAsync(RefreshTokenRequestDto request)
         {
-            // 1. Get claims from the expired access token
-            ClaimsPrincipal principal = _tokenService.GetPrincipalFromExpiredToken(request.AccessToken);
+            // 1. Get claims from the expired access token (malformed or tampered tokens are rejected as 401)
+            ClaimsPrincipal principal;
+            try
+            {
+                principal = _tokenService.GetPrincipalFromExpiredToken(request.AccessToken);
+            }
+            catch (Exception ex) when (ex is SecurityTokenException or ArgumentException)
+            {
+                return ApiResponse<LoginResponseDto>.FailureResponse("Sessão expirada. Por favor, faça login novamente.", 401);
+            }
 
             // Get the email claim
             string? email = principal.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Email)?.Value;
