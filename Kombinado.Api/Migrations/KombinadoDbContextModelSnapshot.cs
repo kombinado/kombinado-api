@@ -137,6 +137,9 @@ namespace Kombinado.Api.Migrations
                     b.Property<string>("VehiclePlate")
                         .HasColumnType("text");
 
+                    b.Property<int?>("VehicleTotalSeats")
+                        .HasColumnType("integer");
+
                     b.Property<string>("WhatsApp")
                         .IsRequired()
                         .HasColumnType("text");

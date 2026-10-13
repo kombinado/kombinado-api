@@ -24,9 +24,11 @@ Kombinado API is the production-ready backend service powering **Kombinado**, a 
 5. [How to Run the Project](#how-to-run)
 6. [API Specification & Endpoints](#api-specification)
    - [Standard API Response Shape](#api-response-shape)
+   - [Validation and Server Errors](#error-responses)
    - [Authentication Domain (`api/Auth`)](#auth-domain)
    - [Rides Domain (`api/Rides`)](#rides-domain)
    - [Ride Requests Domain (`api/requests`)](#requests-domain)
+   - [Users Domain (`api/users`)](#users-domain)
 7. [Portuguese Translation Version](#portuguese-version)
 
 ---
@@ -38,8 +40,8 @@ The platform defines two major user roles based on their registration profile:
 * **Passengers**: Authenticated users who can search for available rides, suggest meeting points, request seats, and track the status of their requests.
 
 ### Key Workflows:
-1. **Academic Onboarding**: Sign up using standard details. Users who intend to drive must register their vehicle model, color, and license plate. E-mails are case-insensitive: they are stored trimmed and in lowercase, so `Alex@...` and `alex@...` are the same account.
-2. **Ride Creation**: Drivers register a ride with available seats and a **future** departure time. The system initializes the ride status to **Open ("Aberta")**. See [Departure time rules](#departure-time-rules).
+1. **Academic Onboarding**: Sign up using standard details. Users who intend to drive must register their vehicle model, color, license plate and how many passenger seats it has (1–8). E-mails are case-insensitive: they are stored trimmed and in lowercase, so `Alex@...` and `alex@...` are the same account.
+2. **Ride Creation**: Drivers register a ride with different origin and destination, a **future** departure time and 1 to 8 seats, never more than their vehicle's seat count. The system initializes the ride status to **Open ("Aberta")**. See [Departure time rules](#departure-time-rules).
 3. **Seat Request**: Passengers browse available rides (only rides that have not departed yet) and request a seat. A request is created in **Pending ("Pendente")** status.
    - A passenger who **canceled** their request can request a seat on the same ride again.
    - A passenger whose request was **rejected** cannot request a seat on the same ride again.
@@ -49,6 +51,7 @@ The platform defines two major user roles based on their registration profile:
 5. **Ride & Request Cancellation**: 
    - If a driver cancels a ride, all accepted/pending requests are automatically transitioned to **Canceled ("Cancelada")**.
    - Passengers can cancel their seat requests, returning the seat back to the pool if already accepted. However, **accepted requests cannot be canceled if the ride's departure time is within 15 minutes**.
+6. **Profile Management**: Users can update their name, WhatsApp and course; drivers can also update their vehicle data. E-mail and role (driver/passenger) cannot be changed.
 
 ---
 
@@ -73,6 +76,7 @@ erDiagram
         string VehicleModel
         string VehicleColor
         string VehiclePlate
+        int VehicleTotalSeats
         string RefreshToken
         DateTime RefreshTokenExpiryTime
     }
@@ -224,10 +228,24 @@ All endpoints implement a standardized payload envelope:
 }
 ```
 
+### <a id="error-responses"></a>Validation and Server Errors
+Errors use the same envelope, with `success: false`, `data: null` and a message in Portuguese that the app can show to the user.
+* **`400` — invalid request body**: an empty body, malformed JSON, a field with the wrong type (e.g. `"totalSeats": "abc"`) or an invalid id in the URL returns:
+  ```json
+  {
+    "success": false,
+    "message": "Dados da requisição inválidos. Verifique se o corpo é um JSON válido e se os campos têm o tipo correto. Campo: totalSeats.",
+    "data": null,
+    "statusCode": 400
+  }
+  ```
+  The ` Campo: <field>.` suffix is added when the invalid JSON field can be identified. Missing or blank fields are validated by each endpoint, with the specific messages listed in its **Errors**.
+* **`500` — unexpected error**: returns `"Ocorreu um erro interno no servidor. Tente novamente mais tarde."`. The exception is logged with the HTTP method, path, `TraceId` and user id. Check the API logs: `docker compose logs -f api` locally, or the App Service **Log stream** on Azure.
+
 ---
 
 ### <a id="auth-domain"></a>1. Authentication Domain (`api/Auth`)
-Endpoints used to handle user onboarding, token issuance, and token refresh. These do not require authentication.
+Endpoints used to handle user onboarding, token issuance, and token refresh. These do not require authentication, except `GET /api/Auth/me`.
 
 #### User Sign-up (`POST /api/Auth/signup`)
 Registers a new passenger or driver account.
@@ -237,16 +255,18 @@ Registers a new passenger or driver account.
     "name": "Alex Smith",
     "email": "alex.smith@academic.edu",
     "password": "StrongPassword123!",
-    "whatsApp": "5534999998888",
+    "whatsApp": "34999998888",
     "course": "Computer Science",
     "isDriver": true,
     "vehicleModel": "Toyota Corolla",
     "vehicleColor": "Silver",
-    "vehiclePlate": "ABC1D23"
+    "vehiclePlate": "ABC1D23",
+    "vehicleTotalSeats": 4
   }
   ```
-  *(Note: Vehicle details are optional but required if `isDriver` is set to `true`).*
+  *(Note: Vehicle details are optional but required if `isDriver` is set to `true`. `vehicleTotalSeats` is the number of passenger seats, from 1 to 8, not counting the driver).*
   *(Note: The e-mail is trimmed and converted to lowercase before validation and storage; login accepts any casing).*
+  *(Note: Name, course and vehicle data follow the same rules as [Update My Profile](#profile-field-rules): text is trimmed, the WhatsApp mask is removed and the plate is stored in uppercase without `-`. Vehicle fields are ignored for passengers).*
 * **Response (Success `200 OK`)**: No tokens are returned — call the login endpoint afterwards.
   ```json
   {
@@ -256,6 +276,11 @@ Registers a new passenger or driver account.
     "statusCode": 200
   }
   ```
+* **Errors**: `400` with one of the messages below (validated in this order):
+  - `"É necessário um e-mail institucional do IFTM (@estudante.iftm.edu.br)."`
+  - Name, WhatsApp, course and, for drivers, vehicle data: the same messages as [Update My Profile](#update-profile-errors) (e.g. `"Informe um WhatsApp válido com DDD (10 ou 11 dígitos, sem o +55)."` or `"O número de vagas do veículo deve ser entre 1 e 8."`).
+  - `"Este e-mail já está cadastrado."`
+  - `"A senha deve ter no mínimo 8 caracteres."` / `"A senha deve conter pelo menos uma letra maiúscula e um número."`
 
 #### User Login (`POST /api/Auth/login`)
 Authenticates an existing user and returns JWT credentials.
@@ -278,11 +303,39 @@ Issues a new JWT Access Token when expired by providing a valid Refresh Token.
   }
   ```
 * **Response (Success `200 OK`)**: Generates and returns a rotated token set in the same envelope.
+* **Errors**: `401` — `"Sessão expirada. Por favor, faça login novamente."` when the access token is malformed or was not signed by this API, or when the refresh token does not match the user's current one or has expired. `400` — `"Token inválido."` when the access token has no e-mail claim.
+
+#### <a id="get-my-profile"></a>Get My Profile (`GET /api/Auth/me`)
+*🔒 **Requires Authenticated User***
+Returns the authenticated user's profile. Vehicle fields are `null` for passengers, and `vehicleTotalSeats` is also `null` for drivers registered before this field existed.
+* **Response (Success `200 OK`)**:
+  ```json
+  {
+    "success": true,
+    "message": "Perfil recuperado com sucesso.",
+    "data": {
+      "id": "3c536c47-22e8-4000-9d4d-24022b92ba6f",
+      "name": "Alex Smith",
+      "email": "alex.smith@estudante.iftm.edu.br",
+      "course": "Computer Science",
+      "whatsApp": "34999998888",
+      "isDriver": true,
+      "vehicleModel": "Toyota Corolla",
+      "vehicleColor": "Silver",
+      "vehiclePlate": "ABC1D23",
+      "vehicleTotalSeats": 4
+    },
+    "statusCode": 200
+  }
+  ```
+* **Errors**: `404` — `"Usuário não encontrado."` when the authenticated user no longer exists in the database.
 
 ---
 
 ### <a id="rides-domain"></a>2. Rides Domain (`api/Rides`)
 These endpoints manage ride postings and require `Authorization: Bearer <token>`. Driver-exclusive endpoints validate the claims via a policy.
+
+`RideResponseDto` includes `driverName` (string): the driver's name from their user record. It is populated in `POST /api/Rides`, `GET /api/Rides` and `GET /api/Rides/me/driving`. This is a response-only field; clients do not send it when creating a ride.
 
 #### Create a Ride (`POST /api/Rides`)
 *🔒 **Requires Driver Role (`DriverOnly` Policy)***
@@ -303,7 +356,15 @@ These endpoints manage ride postings and require `Authorization: Bearer <token>`
   | UTC — `"2026-06-01T18:30:00Z"` | Stored as is |
 
   The departure time is always stored and **returned in UTC** (`Z` suffix) — clients must convert it to local time for display. The three examples above represent the same instant.
-* **Errors**: `400` — `"O horário de partida deve ser uma data futura."` when the departure time is not in the future.
+* **Errors**: `400` with one of the messages below (validated in this order):
+  - `"Informe a origem e o destino da carona."` when `origin` or `destination` is missing or blank (both are trimmed).
+  - `"A origem e o destino devem ter no máximo 200 caracteres."`
+  - `"A origem e o destino devem ser diferentes."` (case-insensitive comparison).
+  - `"O horário de partida deve ser uma data futura."` when the departure time is not in the future.
+  - `"A carona deve oferecer entre 1 e 8 vagas."` when `totalSeats` is out of range.
+  - `"A carona não pode oferecer mais vagas do que o seu veículo possui (4)."` when `totalSeats` is greater than the driver's `vehicleTotalSeats` (drivers registered before this field existed are only limited to 8).
+
+  `404` — `"Motorista não encontrado."` when the authenticated user no longer exists in the database.
 * **Response (Success `201 Created`)**:
   ```json
   {
@@ -311,6 +372,7 @@ These endpoints manage ride postings and require `Authorization: Bearer <token>`
     "message": "Ride created successfully.",
     "data": {
       "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+      "driverName": "Jane Doe",
       "origin": "Main Campus - Gate A",
       "destination": "Downtown Terminal",
       "departureTime": "2026-06-01T18:30:00Z",
@@ -333,6 +395,7 @@ Lists all rides in **Open ("Aberta")** status with available seats and a departu
     "data": [
       {
         "id": "a1b2c3d4-e5f6-...",
+        "driverName": "Jane Doe",
         "origin": "Main Campus",
         "destination": "Downtown",
         "departureTime": "2026-06-01T18:30:00Z",
@@ -351,6 +414,7 @@ Lists all rides in **Open ("Aberta")** status with available seats and a departu
 #### Get My Offered Rides (`GET /api/Rides/me/driving`)
 *🔒 **Requires Driver Role (`DriverOnly` Policy)***
 Lists all rides offered by the logged-in driver.
+Each ride includes `driverName`, containing the logged-in driver's registered name.
 * **Response (Success `200 OK`)**: Same payload format as `GET /api/Rides`.
 
 #### Cancel a Ride (`PATCH /api/Rides/{rideId}/cancel`)
@@ -389,8 +453,9 @@ Allows a passenger to request a seat on a ride.
   | Passenger is the ride's driver | `"Você não pode solicitar vaga em sua própria carona."` |
   | Passenger has a **pending** or **accepted** request for this ride | `"Você já solicitou uma vaga para esta carona."` |
   | Passenger's request for this ride was **rejected** | `"Sua solicitação para esta carona foi recusada pelo motorista."` |
+  | `meetingPointSuggestion` longer than 250 characters | `"A sugestão de ponto de encontro deve ter no máximo 250 caracteres."` |
 
-  A previously **canceled** request does not block a new one.
+  A previously **canceled** request does not block a new one. `meetingPointSuggestion` is optional: it is trimmed, and a blank value is stored as `null`.
 * **Response (Success `200 OK`)**:
   ```json
   {
@@ -476,6 +541,68 @@ Allows a driver to accept or decline a passenger's seat booking request.
 
 ---
 
+### <a id="users-domain"></a>4. Users Domain (`api/users`)
+Endpoints for the authenticated user's own account. They require `Authorization: Bearer <token>`.
+
+#### Update My Profile (`PUT /api/users/profile`)
+*🔒 **Requires Authenticated User***
+Replaces the editable profile data of the authenticated user. Send **all** fields: this is a full update, not a partial one. To read the current profile, use [`GET /api/Auth/me`](#get-my-profile).
+* **Payload Structure (`UpdateProfileRequestDto`)**:
+  ```json
+  {
+    "name": "Alex Smith",
+    "whatsApp": "34999998888",
+    "course": "Computer Science",
+    "vehicleModel": "Toyota Corolla",
+    "vehicleColor": "Silver",
+    "vehiclePlate": "ABC1D23",
+    "vehicleTotalSeats": 4
+  }
+  ```
+* <a id="profile-field-rules"></a>**Field rules** (also applied on [sign-up](#auth-domain)):
+  | Field | Rule |
+  |---|---|
+  | `name` | Required, trimmed, up to 100 characters |
+  | `whatsApp` | Area code + number, **without** `+55`. Formatting is removed (`"(34) 99999-8888"` → `"34999998888"`) and it must have 10 or 11 digits |
+  | `course` | Required, trimmed, up to 100 characters |
+  | `vehicleModel` / `vehicleColor` | **Drivers only.** Required, up to 50 / 30 characters |
+  | `vehiclePlate` | **Drivers only.** Old (`ABC1234`) or Mercosul (`ABC1D23`) format, stored in uppercase without `-` |
+  | `vehicleTotalSeats` | **Drivers only.** Passenger seats, from 1 to 8 (driver not included) |
+
+  Vehicle fields are ignored for passengers. E-mail and role (`isDriver`) cannot be changed. A new `vehicleTotalSeats` only applies to rides created afterwards. The `name` claim inside the current JWT is only refreshed on the next login or token refresh, so reload the profile with `GET /api/Auth/me` after updating.
+* **Response (Success `200 OK`)**: Returns the updated profile, in the same shape as `GET /api/Auth/me`.
+  ```json
+  {
+    "success": true,
+    "message": "Perfil atualizado com sucesso.",
+    "data": {
+      "id": "3c536c47-22e8-4000-9d4d-24022b92ba6f",
+      "name": "Alex Smith",
+      "email": "alex.smith@estudante.iftm.edu.br",
+      "course": "Computer Science",
+      "whatsApp": "34999998888",
+      "isDriver": true,
+      "vehicleModel": "Toyota Corolla",
+      "vehicleColor": "Silver",
+      "vehiclePlate": "ABC1D23",
+      "vehicleTotalSeats": 4
+    },
+    "statusCode": 200
+  }
+  ```
+* <a id="update-profile-errors"></a>**Errors**: `400` with one of the messages below (validated in this order):
+  - `"O nome é obrigatório e deve ter no máximo 100 caracteres."`
+  - `"Informe um WhatsApp válido com DDD (10 ou 11 dígitos, sem o +55)."`
+  - `"O curso é obrigatório e deve ter no máximo 100 caracteres."`
+  - `"Motoristas precisam informar o Modelo, Cor e Placa do veículo."`
+  - `"O modelo do veículo deve ter no máximo 50 caracteres."` / `"A cor do veículo deve ter no máximo 30 caracteres."`
+  - `"Placa inválida. Use o formato ABC1234 ou ABC1D23."`
+  - `"O número de vagas do veículo deve ser entre 1 e 8."`
+
+  `401` — missing or invalid token. `404` — `"Usuário não encontrado."` when the authenticated user no longer exists.
+
+---
+
 ## <a id="portuguese-version"></a>🇧🇷 Kombinado API (Versão em Português)
 
 <details>
@@ -502,8 +629,8 @@ O sistema reconhece dois perfis de usuários devidamente autenticados:
 * **Passageiros**: Usuários que pesquisam caronas ativas que atendam aos seus destinos, solicitam reservas, propõem pontos de encontro e acompanham o status das suas solicitações.
 
 ### Ciclo Operacional:
-1. **Cadastro Completo**: Criação da conta com curso acadêmico e contato telefônico. Perfis de motoristas incluem dados detalhados da placa e modelo do veículo. O e-mail não diferencia maiúsculas de minúsculas: ele é salvo sem espaços e em minúsculas, então `Maria@...` e `maria@...` são a mesma conta.
-2. **Postagem de Carona**: Um motorista cria uma carona com assentos vagos e horário de partida **no futuro**. O sistema cria a viagem sob o estado **Aberta**. Veja as [regras do horário de partida](#pt-regras-horario).
+1. **Cadastro Completo**: Criação da conta com curso acadêmico e contato telefônico. Perfis de motoristas incluem modelo, cor e placa do veículo e quantas vagas ele tem para passageiros (de 1 a 8). O e-mail não diferencia maiúsculas de minúsculas: ele é salvo sem espaços e em minúsculas, então `Maria@...` e `maria@...` são a mesma conta.
+2. **Postagem de Carona**: Um motorista cria uma carona com origem e destino diferentes, horário de partida **no futuro** e de 1 a 8 vagas, sem passar do número de vagas do seu veículo. O sistema cria a viagem sob o estado **Aberta**. Veja as [regras do horário de partida](#pt-regras-horario).
 3. **Solicitação de Assento**: Um passageiro localiza a carona (apenas caronas que ainda não partiram aparecem) e submete uma solicitação de reserva informando sugestões de embarque. O pedido entra em status **Pendente**.
    - Quem **cancelou** a própria solicitação pode solicitar vaga novamente na mesma carona.
    - Quem teve a solicitação **recusada** não pode solicitar vaga novamente na mesma carona.
@@ -513,6 +640,7 @@ O sistema reconhece dois perfis de usuários devidamente autenticados:
 5. **Políticas de Cancelamento**:
    - Se o motorista cancelar a carona, todos os passageiros vinculados têm suas solicitações marcadas automaticamente como **Cancelada**.
    - O passageiro pode remover sua própria reserva, devolvendo a vaga para a carona caso já tenha sido aceita. No entanto, **solicitações aceitas não podem ser canceladas se faltarem menos de 15 minutos para o horário de partida**.
+6. **Gestão do Perfil**: O usuário pode atualizar nome, WhatsApp e curso; motoristas também podem atualizar os dados do veículo. E-mail e perfil (motorista/passageiro) não podem ser alterados.
 
 ---
 
@@ -537,6 +665,7 @@ erDiagram
         string VehicleModel
         string VehicleColor
         string VehiclePlate
+        int VehicleTotalSeats
         string RefreshToken
         DateTime RefreshTokenExpiryTime
     }
@@ -688,10 +817,24 @@ Todas as saídas de requisição seguem o contrato estruturado abaixo:
 }
 ```
 
+### <a id="pt-erros"></a>Erros de Validação e do Servidor
+Os erros usam o mesmo envelope, com `success: false`, `data: null` e uma mensagem em português que o app pode exibir ao usuário.
+* **`400` — corpo da requisição inválido**: corpo vazio, JSON malformado, campo com tipo errado (ex.: `"totalSeats": "abc"`) ou id inválido na URL retornam:
+  ```json
+  {
+    "success": false,
+    "message": "Dados da requisição inválidos. Verifique se o corpo é um JSON válido e se os campos têm o tipo correto. Campo: totalSeats.",
+    "data": null,
+    "statusCode": 400
+  }
+  ```
+  O sufixo ` Campo: <campo>.` é adicionado quando é possível identificar o campo inválido do JSON. Campos ausentes ou em branco são validados por cada endpoint, com as mensagens específicas listadas em **Erros**.
+* **`500` — erro inesperado**: retorna `"Ocorreu um erro interno no servidor. Tente novamente mais tarde."`. A exceção é registrada em log com o método HTTP, a rota, o `TraceId` e o id do usuário. Consulte os logs da API: `docker compose logs -f api` localmente, ou o **Log stream** do App Service no Azure.
+
 ---
 
 ### Domínio de Autenticação (`api/Auth`)
-Processos públicos para registro de novas credenciais, login de usuários e renovação de tokens de acesso vencidos.
+Processos públicos para registro de novas credenciais, login de usuários e renovação de tokens de acesso vencidos. A exceção é o `GET /api/Auth/me`, que exige token.
 
 #### Cadastro de Usuário (`POST /api/Auth/signup`)
 Criação de novos registros para passageiros ou motoristas.
@@ -701,16 +844,18 @@ Criação de novos registros para passageiros ou motoristas.
     "name": "Maria Silva",
     "email": "maria.silva@academic.edu",
     "password": "SenhaSegura123!",
-    "whatsApp": "5534999998888",
+    "whatsApp": "34999998888",
     "course": "Engenharia de Software",
     "isDriver": true,
     "vehicleModel": "Toyota Corolla",
     "vehicleColor": "Prata",
-    "vehiclePlate": "ABC1D23"
+    "vehiclePlate": "ABC1D23",
+    "vehicleTotalSeats": 4
   }
   ```
-  *(Nota: Atributos do veículo são opcionais, exceto se `isDriver` for definido como `true`).*
+  *(Nota: Atributos do veículo são opcionais, exceto se `isDriver` for definido como `true`. `vehicleTotalSeats` é o número de vagas para passageiros, de 1 a 8, sem contar o motorista).*
   *(Nota: O e-mail é convertido para minúsculas e sem espaços antes da validação e do armazenamento; o login aceita qualquer combinação de maiúsculas/minúsculas).*
+  *(Nota: Nome, curso e dados do veículo seguem as mesmas regras do [Atualizar Meu Perfil](#pt-regras-perfil): os textos ficam sem espaços nas pontas, a máscara do WhatsApp é removida e a placa é salva em maiúsculas e sem `-`. Os campos do veículo são ignorados para passageiros).*
 * **Resposta de Sucesso (`200 OK`)**: Não retorna tokens — chame o endpoint de login em seguida.
   ```json
   {
@@ -720,6 +865,11 @@ Criação de novos registros para passageiros ou motoristas.
     "statusCode": 200
   }
   ```
+* **Erros**: `400` com uma das mensagens abaixo (validadas nesta ordem):
+  - `"É necessário um e-mail institucional do IFTM (@estudante.iftm.edu.br)."`
+  - Nome, WhatsApp, curso e, para motoristas, dados do veículo: as mesmas mensagens do [Atualizar Meu Perfil](#pt-erros-perfil) (ex.: `"Informe um WhatsApp válido com DDD (10 ou 11 dígitos, sem o +55)."` ou `"O número de vagas do veículo deve ser entre 1 e 8."`).
+  - `"Este e-mail já está cadastrado."`
+  - `"A senha deve ter no mínimo 8 caracteres."` / `"A senha deve conter pelo menos uma letra maiúscula e um número."`
 
 #### Acesso / Login (`POST /api/Auth/login`)
 Gera tokens de acesso a partir de e-mail e senha.
@@ -741,12 +891,40 @@ Obtém um novo token de acesso (JWT) fornecendo um token de refresh válido.
     "refreshToken": "7c9f8d..."
   }
   ```
-* **Response (Success `200 OK`)**: Retorna o par de chaves regenerado.
+* **Resposta de Sucesso (`200 OK`)**: Retorna o par de chaves regenerado.
+* **Erros**: `401` — `"Sessão expirada. Por favor, faça login novamente."` quando o token de acesso está malformado ou não foi assinado por esta API, ou quando o refresh token não é o atual do usuário ou já expirou. `400` — `"Token inválido."` quando o token de acesso não tem a claim de e-mail.
+
+#### <a id="pt-meu-perfil"></a>Meu Perfil (`GET /api/Auth/me`)
+*🔒 **Usuários Autenticados***
+Retorna o perfil do usuário autenticado. Os campos do veículo vêm `null` para passageiros, e `vehicleTotalSeats` também vem `null` para motoristas cadastrados antes de esse campo existir.
+* **Resposta de Sucesso (`200 OK`)**:
+  ```json
+  {
+    "success": true,
+    "message": "Perfil recuperado com sucesso.",
+    "data": {
+      "id": "3c536c47-22e8-4000-9d4d-24022b92ba6f",
+      "name": "Maria Silva",
+      "email": "maria.silva@estudante.iftm.edu.br",
+      "course": "Engenharia de Software",
+      "whatsApp": "34999998888",
+      "isDriver": true,
+      "vehicleModel": "Toyota Corolla",
+      "vehicleColor": "Prata",
+      "vehiclePlate": "ABC1D23",
+      "vehicleTotalSeats": 4
+    },
+    "statusCode": 200
+  }
+  ```
+* **Erros**: `404` — `"Usuário não encontrado."` quando o usuário autenticado não existe mais no banco.
 
 ---
 
 ### Domínio de Caronas (`api/Rides`)
 Controle das ofertas de trajetos rodoviários. Exige cabeçalho `Authorization: Bearer <token>`. Ações exclusivas de motoristas validam a política de acesso correspondente.
+
+O `RideResponseDto` inclui `driverName` (string): o nome do motorista no cadastro de usuário. Ele é preenchido em `POST /api/Rides`, `GET /api/Rides` e `GET /api/Rides/me/driving`. É um campo exclusivo da resposta; o cliente não o envia ao criar uma carona.
 
 #### Cadastrar Oferta de Carona (`POST /api/Rides`)
 *🔒 **Apenas Motoristas (`DriverOnly` Policy)***
@@ -767,7 +945,15 @@ Controle das ofertas de trajetos rodoviários. Exige cabeçalho `Authorization: 
   | UTC — `"2026-06-01T18:30:00Z"` | Salvo como está |
 
   O horário é sempre armazenado e **retornado em UTC** (sufixo `Z`) — o cliente deve convertê-lo para o horário local ao exibir. Os três exemplos acima representam o mesmo instante.
-* **Erros**: `400` — `"O horário de partida deve ser uma data futura."` quando o horário de partida não está no futuro.
+* **Erros**: `400` com uma das mensagens abaixo (validadas nesta ordem):
+  - `"Informe a origem e o destino da carona."` quando `origin` ou `destination` está ausente ou em branco (os dois ficam sem espaços nas pontas).
+  - `"A origem e o destino devem ter no máximo 200 caracteres."`
+  - `"A origem e o destino devem ser diferentes."` (comparação sem diferenciar maiúsculas/minúsculas).
+  - `"O horário de partida deve ser uma data futura."` quando o horário de partida não está no futuro.
+  - `"A carona deve oferecer entre 1 e 8 vagas."` quando `totalSeats` está fora do intervalo.
+  - `"A carona não pode oferecer mais vagas do que o seu veículo possui (4)."` quando `totalSeats` é maior que o `vehicleTotalSeats` do motorista (motoristas cadastrados antes de esse campo existir ficam limitados apenas a 8).
+
+  `404` — `"Motorista não encontrado."` quando o usuário autenticado não existe mais no banco.
 * **Resposta de Sucesso (`201 Created`)**:
   ```json
   {
@@ -775,6 +961,7 @@ Controle das ofertas de trajetos rodoviários. Exige cabeçalho `Authorization: 
     "message": "Carona criada com sucesso.",
     "data": {
       "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+      "driverName": "Maria Silva",
       "origin": "Portaria Principal - Bloco A",
       "destination": "Terminal Central",
       "departureTime": "2026-06-01T18:30:00Z",
@@ -797,6 +984,7 @@ Retorna todas as ofertas no estado **Aberta**, com vagas disponíveis e horário
     "data": [
       {
         "id": "a1b2c3d4-e5f6-...",
+        "driverName": "Maria Silva",
         "origin": "Portaria Principal - Bloco A",
         "destination": "Terminal Central",
         "departureTime": "2026-06-01T18:30:00Z",
@@ -815,6 +1003,7 @@ Retorna todas as ofertas no estado **Aberta**, com vagas disponíveis e horário
 #### Minhas Caronas Oferecidas (`GET /api/Rides/me/driving`)
 *🔒 **Apenas Motoristas (`DriverOnly` Policy)***
 Lista os cadastros de carona vinculados ao motorista ativo.
+Cada carona inclui `driverName`, com o nome cadastrado do motorista autenticado.
 * **Resposta de Sucesso (`200 OK`)**: Retorna lista de caronas estruturada no mesmo envelope.
 
 #### Cancelar uma Carona (`PATCH /api/Rides/{rideId}/cancel`)
@@ -853,8 +1042,9 @@ Cria um pedido pendente de assento na carona informada.
   | Passageiro é o motorista da carona | `"Você não pode solicitar vaga em sua própria carona."` |
   | Passageiro já tem solicitação **pendente** ou **aceita** nesta carona | `"Você já solicitou uma vaga para esta carona."` |
   | Solicitação do passageiro nesta carona foi **recusada** | `"Sua solicitação para esta carona foi recusada pelo motorista."` |
+  | `meetingPointSuggestion` com mais de 250 caracteres | `"A sugestão de ponto de encontro deve ter no máximo 250 caracteres."` |
 
-  Uma solicitação **cancelada** anteriormente não impede um novo pedido.
+  Uma solicitação **cancelada** anteriormente não impede um novo pedido. O `meetingPointSuggestion` é opcional: fica sem espaços nas pontas, e um valor em branco é salvo como `null`.
 * **Resposta de Sucesso (`200 OK`)**:
   ```json
   {
@@ -937,5 +1127,67 @@ Deferimento (Aceite ou Recusa) de reservas sob a ótica do motorista.
   ```
   *(Status transita para `"Aceita"` ou `"Recusada"`, conforme o campo `accept`).*
 * **Erros**: `400` — `"Não é possível aceitar esta solicitação, pois a carona já partiu."` ao tentar aceitar depois do horário de partida. Recusar continua permitido.
+
+---
+
+### Domínio de Usuários (`api/users`)
+Endpoints da conta do próprio usuário autenticado. Exigem o cabeçalho `Authorization: Bearer <token>`.
+
+#### Atualizar Meu Perfil (`PUT /api/users/profile`)
+*🔒 **Usuários Autenticados***
+Substitui os dados editáveis do perfil do usuário autenticado. Envie **todos** os campos: a atualização é completa, não parcial. Para ler o perfil atual, use o [`GET /api/Auth/me`](#pt-meu-perfil).
+* **Corpo da Requisição (`UpdateProfileRequestDto`)**:
+  ```json
+  {
+    "name": "Maria Silva",
+    "whatsApp": "34999998888",
+    "course": "Engenharia de Software",
+    "vehicleModel": "Toyota Corolla",
+    "vehicleColor": "Prata",
+    "vehiclePlate": "ABC1D23",
+    "vehicleTotalSeats": 4
+  }
+  ```
+* <a id="pt-regras-perfil"></a>**Regras dos campos** (também aplicadas no cadastro):
+  | Campo | Regra |
+  |---|---|
+  | `name` | Obrigatório, sem espaços nas pontas, até 100 caracteres |
+  | `whatsApp` | DDD + número, **sem** o `+55`. A máscara é removida (`"(34) 99999-8888"` → `"34999998888"`) e o número deve ter 10 ou 11 dígitos |
+  | `course` | Obrigatório, sem espaços nas pontas, até 100 caracteres |
+  | `vehicleModel` / `vehicleColor` | **Apenas motoristas.** Obrigatórios, até 50 / 30 caracteres |
+  | `vehiclePlate` | **Apenas motoristas.** Formato antigo (`ABC1234`) ou Mercosul (`ABC1D23`), salva em maiúsculas e sem `-` |
+  | `vehicleTotalSeats` | **Apenas motoristas.** Vagas para passageiros, de 1 a 8 (sem contar o motorista) |
+
+  Os campos do veículo são ignorados para passageiros. E-mail e perfil (`isDriver`) não podem ser alterados. Um novo `vehicleTotalSeats` só vale para caronas criadas depois da alteração. A claim `name` do JWT atual só é atualizada no próximo login ou refresh do token; recarregue o perfil com `GET /api/Auth/me` depois de atualizar.
+* **Resposta de Sucesso (`200 OK`)**: Retorna o perfil atualizado, no mesmo formato do `GET /api/Auth/me`.
+  ```json
+  {
+    "success": true,
+    "message": "Perfil atualizado com sucesso.",
+    "data": {
+      "id": "3c536c47-22e8-4000-9d4d-24022b92ba6f",
+      "name": "Maria Silva",
+      "email": "maria.silva@estudante.iftm.edu.br",
+      "course": "Engenharia de Software",
+      "whatsApp": "34999998888",
+      "isDriver": true,
+      "vehicleModel": "Toyota Corolla",
+      "vehicleColor": "Prata",
+      "vehiclePlate": "ABC1D23",
+      "vehicleTotalSeats": 4
+    },
+    "statusCode": 200
+  }
+  ```
+* <a id="pt-erros-perfil"></a>**Erros**: `400` com uma das mensagens abaixo (validadas nesta ordem):
+  - `"O nome é obrigatório e deve ter no máximo 100 caracteres."`
+  - `"Informe um WhatsApp válido com DDD (10 ou 11 dígitos, sem o +55)."`
+  - `"O curso é obrigatório e deve ter no máximo 100 caracteres."`
+  - `"Motoristas precisam informar o Modelo, Cor e Placa do veículo."`
+  - `"O modelo do veículo deve ter no máximo 50 caracteres."` / `"A cor do veículo deve ter no máximo 30 caracteres."`
+  - `"Placa inválida. Use o formato ABC1234 ou ABC1D23."`
+  - `"O número de vagas do veículo deve ser entre 1 e 8."`
+
+  `401` — token ausente ou inválido. `404` — `"Usuário não encontrado."` quando o usuário autenticado não existe mais.
 
 </details>
