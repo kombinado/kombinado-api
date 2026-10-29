@@ -119,9 +119,9 @@ erDiagram
 ---
 
 ## <a id="technology-stack"></a>🛠️ Technology Stack
-* **Runtime**: [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (ASP.NET Core Web API)
+* **Runtime**: [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (ASP.NET Core Web API)
 * **Object-Relational Mapper**: [Entity Framework Core (EF Core)](https://learn.microsoft.com/en-us/ef/core/)
-* **Database**: [PostgreSQL](https://www.postgresql.org/)
+* **Database**: [PostgreSQL 18](https://www.postgresql.org/)
 * **Containerization**: [Docker & Docker Compose](https://www.docker.com/) (runs the API, PostgreSQL and pgAdmin with a single command)
 * **Authentication**: [JSON Web Tokens (JWT)](https://jwt.io/) with symmetric key signing and Refresh Token rotation.
 * **API Documentation**: Swagger/OpenAPI UI.
@@ -132,7 +132,7 @@ erDiagram
 
 Ensure the following tools are installed:
 * **Docker Engine & Docker Compose v2** (the `docker compose` command) — this is all you need to run the project.
-* **.NET 8 SDK** and the EF CLI (`dotnet ef`) — only needed to run/debug the API outside Docker or to create new migrations.
+* **.NET 10 SDK** and the EF CLI (`dotnet ef`) — only needed to run/debug the API outside Docker or to create new migrations.
 
 ### Environment Configuration (`.env`)
 Copy `.env.example` to `.env` in the project root directory (next to `docker-compose.yaml`) and fill in the values:
@@ -708,9 +708,9 @@ erDiagram
 ---
 
 ## <a id="pt-stack"></a>Stack Tecnológico
-* **Ambiente de Execução**: [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (ASP.NET Core Web API)
+* **Ambiente de Execução**: [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (ASP.NET Core Web API)
 * **Mapeamento Objeto-Relacional**: [Entity Framework Core (EF Core)](https://learn.microsoft.com/en-us/ef/core/)
-* **Banco de Dados**: [PostgreSQL](https://www.postgresql.org/)
+* **Banco de Dados**: [PostgreSQL 18](https://www.postgresql.org/)
 * **Containers**: [Docker & Docker Compose](https://www.docker.com/) (sobe a API, o PostgreSQL e o pgAdmin com um único comando)
 * **Segurança e Login**: [JSON Web Tokens (JWT)](https://jwt.io/) com chaves simétricas e fluxo de Refresh Token rotativo.
 * **Interface Interativa**: Swagger UI/OpenAPI.
@@ -721,7 +721,7 @@ erDiagram
 
 Certifique-se de instalar as dependências locais:
 * **Docker & Docker Compose v2** (comando `docker compose`) — é tudo o que você precisa para rodar o projeto.
-* **.NET 8 SDK** e a CLI `dotnet ef` — necessários apenas para rodar/depurar a API fora do Docker ou criar novas migrações.
+* **.NET 10 SDK** e a CLI `dotnet ef` — necessários apenas para rodar/depurar a API fora do Docker ou criar novas migrações.
 
 ### Variáveis de Ambiente (.env)
 Copie o `.env.example` para `.env` na raiz do repositório (diretório que contém o `docker-compose.yaml`) e preencha os valores:
