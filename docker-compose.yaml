@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     container_name: kombinado_pg
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
@@ -9,7 +9,8 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PostgreSQL 18+ expects the volume at /var/lib/postgresql (data lives in a versioned subfolder)
+      - pgdata18:/var/lib/postgresql
     healthcheck:
       # TCP check (-h localhost) so it only passes once the real server is up, not the init-time one
       test: ["CMD-SHELL", "pg_isready -h localhost -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -42,7 +43,7 @@ services:
     restart: unless-stopped
 
   pgadmin:
-    image: dpage/pgadmin4
+    image: dpage/pgadmin4:9.19
     container_name: kombinado_pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?Set PGADMIN_DEFAULT_EMAIL in .env}
@@ -54,4 +55,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  pgdata:
+  # Renamed from "pgdata" (PostgreSQL 15): data files are not compatible across major versions
+  pgdata18:
