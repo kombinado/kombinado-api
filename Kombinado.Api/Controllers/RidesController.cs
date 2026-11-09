@@ -72,7 +72,22 @@ namespace Kombinado.Api.Controllers
             {
                 return StatusCode(response.StatusCode, response);
             }
-            
+
+            return Ok(response);
+        }
+
+        [HttpPatch("{rideId}/complete")]
+        [Authorize("DriverOnly")]
+        public async Task<IActionResult> CompleteRide(Guid rideId)
+        {
+            Guid driverId = User.GetUserId();
+
+            var response = await _rideService.CompleteRideAsync(rideId, driverId);
+            if (!response.Success)
+            {
+                return StatusCode(response.StatusCode, response);
+            }
+
             return Ok(response);
         }
     }
