@@ -161,6 +161,7 @@ public class RideRequestService : IRideRequestService
                 Origin = ride.Origin,
                 Destination = ride.Destination,
                 DepartureTime = ride.DepartureTime,
+                RideStatus = ride.Status,
                 VehicleModel = driver.VehicleModel,
                 VehicleColor = driver.VehicleColor,
                 VehiclePlate = driver.VehiclePlate
@@ -183,7 +184,15 @@ public class RideRequestService : IRideRequestService
         {
             return ApiResponse<string>.FailureResponse("Solicitação de vaga não encontrada.", 404);
         }
-        
+
+        if (request.Ride.Status != RideStatus.Open && request.Ride.Status != RideStatus.Full)
+        {
+            return ApiResponse<string>.FailureResponse(
+                "Não é possível cancelar uma solicitação de uma carona encerrada ou cancelada.",
+                400
+            );
+        }
+
         if (request.Status == RideRequestStatus.Rejected)
         {
             return ApiResponse<string>.FailureResponse(

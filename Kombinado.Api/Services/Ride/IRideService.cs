@@ -11,5 +11,6 @@ namespace Kombinado.Api.Services.Ride
         Task<ApiResponse<IEnumerable<RideResponseDto>>> GetMyDrivingRidesAsync(Guid driverId);
         Task<ApiResponse<string>> CancelRideAsync(Guid rideId, Guid driverId);
         Task<ApiResponse<string>> CompleteRideAsync(Guid rideId, Guid driverId);
+        Task<ApiResponse<IEnumerable<RideHistoryResponseDto>>> GetRideHistoryAsync(Guid userId);
     }
 }
