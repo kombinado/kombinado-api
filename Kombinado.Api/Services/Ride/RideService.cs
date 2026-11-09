@@ -195,7 +195,12 @@ public class RideService : IRideService
         {
             return ApiResponse<string>.FailureResponse("Você não tem permissão para cancelar esta carona.", 403);
         }
-        
+
+        if (ride.Status != RideStatus.Open && ride.Status != RideStatus.Full)
+        {
+            return ApiResponse<string>.FailureResponse("Apenas caronas abertas ou lotadas podem ser canceladas.", 400);
+        }
+
         // Soft delete
         ride.Status = RideStatus.Canceled;
 
