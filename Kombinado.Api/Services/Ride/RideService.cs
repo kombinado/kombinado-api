@@ -223,16 +223,10 @@ public class RideService : IRideService
         // Soft delete
         ride.Status = RideStatus.Canceled;
 
-        // Cancel associated requests
-        if (ride.Requests != null)
+        // Accepted requests are kept for the trip history; the ride status tells it was canceled
+        foreach (var request in ride.Requests.Where(r => r.Status == RideRequestStatus.Pending))
         {
-            foreach (var request in ride.Requests)
-            {
-                if (request.Status == RideRequestStatus.Pending || request.Status == RideRequestStatus.Accepted)
-                {
-                    request.Status = RideRequestStatus.Cancelled;
-                }
-            }
+            request.Status = RideRequestStatus.Cancelled;
         }
 
         await _dbContext.SaveChangesAsync();
