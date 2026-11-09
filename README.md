@@ -52,14 +52,16 @@ The platform defines two major user roles based on their registration profile:
    - Before accepting, the API checks the overlap rules again for the passenger (they may have been accepted elsewhere or created a ride in the meantime). Once accepted, the passenger's other **pending** requests for overlapping rides are transitioned to **Canceled ("Cancelada")**; they can request those rides again if they cancel the accepted seat.
    - If rejected, the request status is updated to **Rejected ("Recusada")**, and the passenger is notified via the API status.
 5. **Ride & Request Cancellation**: 
-   - If a driver cancels a ride, all accepted/pending requests are automatically transitioned to **Canceled ("Cancelada")**.
+   - If a driver cancels a ride, its **pending** requests are transitioned to **Canceled ("Cancelada")**. **Accepted** requests stay **Accepted ("Aceita")** so they show up in the passengers' trip history; the ride status (`"Cancelada"`) tells the trip was canceled.
+   - Requests for a completed or canceled ride can no longer be canceled by the passenger.
    - Only **Open** or **Full** rides can be canceled.
    - Passengers can cancel their seat requests, returning the seat back to the pool if already accepted. However, **accepted requests cannot be canceled if the ride's departure time is within 15 minutes**.
 6. **Ride Completion**: A ride becomes **Completed ("Concluída")** in two ways:
    - **By the driver**: only **after the departure time**, and only for **Open** or **Full** rides.
    - **Automatically**: **3 hours after the departure time**, if the driver did not complete it. This is applied whenever the API lists rides or requests (no background job).
    - Accepted requests stay **Accepted ("Aceita")**; requests still **Pending** are transitioned to **Canceled ("Cancelada")**.
-7. **Profile Management**: Users can update their name, WhatsApp and course; drivers can also update their vehicle data. E-mail and role (driver/passenger) cannot be changed.
+7. **Trip History**: Each user can list their completed and canceled rides, both as a driver and as a passenger (only rides where their seat was **accepted**), from the most recent to the oldest.
+8. **Profile Management**: Users can update their name, WhatsApp and course; drivers can also update their vehicle data. E-mail and role (driver/passenger) cannot be changed.
 
 ---
 
@@ -429,9 +431,40 @@ Lists all rides offered by the logged-in driver.
 Each ride includes `driverName`, containing the logged-in driver's registered name.
 * **Response (Success `200 OK`)**: Same payload format as `GET /api/Rides`.
 
+#### Trip History (`GET /api/Rides/history`)
+*🔒 **Requires Authenticated User** (drivers and passengers)*
+Lists the logged-in user's **completed** (`"Concluída"`) and **canceled** (`"Cancelada"`) rides, ordered by departure time from the most recent to the oldest.
+* **As a driver**: every completed or canceled ride they offered.
+* **As a passenger**: only rides where their request was **accepted**. Pending requests, rejected requests and seats the passenger canceled are not included.
+* Rides that departed more than 3 hours ago are completed automatically before the list is built.
+* **Fields**: `role` is `"Motorista"` or `"Passageiro"`; `status` is the ride status; `passengersCount` is the number of accepted passengers; vehicle fields come from the driver.
+* **Response (Success `200 OK`)**:
+  ```json
+  {
+    "success": true,
+    "message": "Histórico de viagens recuperado com sucesso.",
+    "data": [
+      {
+        "id": "a1b2c3d4-e5f6-...",
+        "role": "Passageiro",
+        "driverName": "Jane Doe",
+        "origin": "Main Campus",
+        "destination": "Downtown",
+        "departureTime": "2026-06-01T18:30:00Z",
+        "status": "Concluída",
+        "passengersCount": 3,
+        "vehicleModel": "Honda Civic",
+        "vehicleColor": "Black",
+        "vehiclePlate": "XYZ9W87"
+      }
+    ],
+    "statusCode": 200
+  }
+  ```
+
 #### Cancel a Ride (`PATCH /api/Rides/{rideId}/cancel`)
 *🔒 **Requires Driver Role (`DriverOnly` Policy)***
-Cancels a specific ride and sets its status to `"Cancelada"`.
+Cancels a specific ride and sets its status to `"Cancelada"`. Pending requests become `"Cancelada"`; accepted requests stay `"Aceita"` (kept for the trip history).
 * **Response (Success `200 OK`)**:
   ```json
   {
@@ -526,6 +559,7 @@ Retrieves all requests made by the logged-in passenger.
         "origin": "Main Campus",
         "destination": "Downtown",
         "departureTime": "2026-06-01T18:30:00Z",
+        "rideStatus": "Aberta",
         "vehicleModel": "Honda Civic",
         "vehicleColor": "Black",
         "vehiclePlate": "XYZ9W87"
@@ -534,6 +568,7 @@ Retrieves all requests made by the logged-in passenger.
     "statusCode": 200
   }
   ```
+  Canceled requests are not listed. `rideStatus` is the ride status: an `"Aceita"` request with `rideStatus` `"Cancelada"` means the driver canceled the ride, and `"Concluída"` means the trip has finished.
 
 #### Cancel Request (`PATCH /api/requests/{requestId}/cancel`)
 *🔒 **Requires Authenticated User***
@@ -547,6 +582,7 @@ Allows a passenger to retract a pending or accepted seat request.
     "statusCode": 200
   }
   ```
+* **Errors**: `400` — `"Não é possível cancelar uma solicitação de uma carona encerrada ou cancelada."` when the ride is already completed or canceled.
 
 #### Get Requests for a Ride (`GET /api/requests/ride/{rideId}`)
 *🔒 **Requires Driver Role (`DriverOnly` Policy)***
@@ -682,14 +718,16 @@ O sistema reconhece dois perfis de usuários devidamente autenticados:
    - Antes de aceitar, a API confere de novo as regras de sobreposição para o passageiro (ele pode ter sido aceito em outra carona ou criado uma carona nesse meio-tempo). Depois do aceite, as outras solicitações **pendentes** do passageiro em caronas sobrepostas passam para **Cancelada**; ele pode pedir vaga nelas de novo se cancelar a vaga aceita.
    - Se **Recusar**, o status da solicitação atualiza para **Recusada**, permitindo ao passageiro buscar outras opções.
 5. **Políticas de Cancelamento**:
-   - Se o motorista cancelar a carona, todos os passageiros vinculados têm suas solicitações marcadas automaticamente como **Cancelada**.
+   - Se o motorista cancelar a carona, as solicitações **pendentes** passam para **Cancelada**. As **aceitas** continuam **Aceita**, para aparecerem no histórico de viagens dos passageiros; o status da carona (`"Cancelada"`) indica que a viagem foi cancelada.
+   - Solicitações de uma carona concluída ou cancelada não podem mais ser canceladas pelo passageiro.
    - Só caronas **Abertas** ou **Lotadas** podem ser canceladas.
    - O passageiro pode remover sua própria reserva, devolvendo a vaga para a carona caso já tenha sido aceita. No entanto, **solicitações aceitas não podem ser canceladas se faltarem menos de 15 minutos para o horário de partida**.
 6. **Encerramento da Carona**: Uma carona passa a ser **Concluída** de duas formas:
    - **Pelo motorista**: só **depois do horário de partida**, e só para caronas **Abertas** ou **Lotadas**.
    - **Automaticamente**: **3 horas depois do horário de partida**, se o motorista não encerrar. A regra é aplicada sempre que a API lista caronas ou solicitações (sem tarefa em segundo plano).
    - Solicitações **Aceitas** continuam **Aceita**; as que ainda estavam **Pendentes** passam para **Cancelada**.
-7. **Gestão do Perfil**: O usuário pode atualizar nome, WhatsApp e curso; motoristas também podem atualizar os dados do veículo. E-mail e perfil (motorista/passageiro) não podem ser alterados.
+7. **Histórico de Viagens**: Cada usuário pode listar suas caronas concluídas e canceladas, como motorista e como passageiro (só as caronas em que sua vaga foi **aceita**), da mais recente para a mais antiga.
+8. **Gestão do Perfil**: O usuário pode atualizar nome, WhatsApp e curso; motoristas também podem atualizar os dados do veículo. E-mail e perfil (motorista/passageiro) não podem ser alterados.
 
 ---
 
@@ -1059,9 +1097,40 @@ Lista os cadastros de carona vinculados ao motorista ativo.
 Cada carona inclui `driverName`, com o nome cadastrado do motorista autenticado.
 * **Resposta de Sucesso (`200 OK`)**: Retorna lista de caronas estruturada no mesmo envelope.
 
+#### Histórico de Viagens (`GET /api/Rides/history`)
+*🔒 **Qualquer Usuário Autenticado** (motoristas e passageiros)*
+Lista as caronas **concluídas** (`"Concluída"`) e **canceladas** (`"Cancelada"`) do usuário logado, ordenadas pelo horário de partida, da mais recente para a mais antiga.
+* **Como motorista**: todas as caronas que ele ofereceu e que foram concluídas ou canceladas.
+* **Como passageiro**: só as caronas em que a solicitação foi **aceita**. Solicitações pendentes, recusadas e vagas canceladas pelo próprio passageiro não entram.
+* Caronas que partiram há mais de 3 horas são concluídas automaticamente antes de montar a lista.
+* **Campos**: `role` é `"Motorista"` ou `"Passageiro"`; `status` é o status da carona; `passengersCount` é a quantidade de passageiros aceitos; os dados do veículo são os do motorista.
+* **Resposta de Sucesso (`200 OK`)**:
+  ```json
+  {
+    "success": true,
+    "message": "Histórico de viagens recuperado com sucesso.",
+    "data": [
+      {
+        "id": "a1b2c3d4-e5f6-...",
+        "role": "Passageiro",
+        "driverName": "Jane Doe",
+        "origin": "Portaria Principal",
+        "destination": "Terminal Central",
+        "departureTime": "2026-06-01T18:30:00Z",
+        "status": "Concluída",
+        "passengersCount": 3,
+        "vehicleModel": "Honda Civic",
+        "vehicleColor": "Preto",
+        "vehiclePlate": "XYZ9W87"
+      }
+    ],
+    "statusCode": 200
+  }
+  ```
+
 #### Cancelar uma Carona (`PATCH /api/Rides/{rideId}/cancel`)
 *🔒 **Apenas Motoristas (`DriverOnly` Policy)***
-Invalida o trajeto e desmarca as vagas preenchidas, definindo o status como `"Cancelada"`.
+Cancela a carona, definindo o status como `"Cancelada"`. As solicitações pendentes passam para `"Cancelada"`; as aceitas continuam `"Aceita"` (ficam para o histórico de viagens).
 * **Resposta de Sucesso (`200 OK`)**:
   ```json
   {
@@ -1156,6 +1225,7 @@ Recupera todos os pedidos de assento criados pelo passageiro logado.
         "origin": "Portaria Principal",
         "destination": "Terminal Central",
         "departureTime": "2026-06-01T18:30:00Z",
+        "rideStatus": "Aberta",
         "vehicleModel": "Honda Civic",
         "vehicleColor": "Preto",
         "vehiclePlate": "XYZ9W87"
@@ -1164,6 +1234,7 @@ Recupera todos os pedidos de assento criados pelo passageiro logado.
     "statusCode": 200
   }
   ```
+  Solicitações canceladas não são listadas. `rideStatus` é o status da carona: uma solicitação `"Aceita"` com `rideStatus` `"Cancelada"` significa que o motorista cancelou a carona, e `"Concluída"` significa que a viagem terminou.
 
 #### Cancelar Minha Solicitação (`PATCH /api/requests/{requestId}/cancel`)
 *🔒 **Qualquer Usuário Autenticado***
@@ -1177,6 +1248,7 @@ Permite a desistência de um pedido feito previamente pelo passageiro.
     "statusCode": 200
   }
   ```
+* **Erros**: `400` — `"Não é possível cancelar uma solicitação de uma carona encerrada ou cancelada."` quando a carona já foi concluída ou cancelada.
 
 #### Listar Solicitações de uma Carona (`GET /api/requests/ride/{rideId}`)
 *🔒 **Apenas Motoristas (`DriverOnly` Policy)***
