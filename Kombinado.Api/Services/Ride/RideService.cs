@@ -1,5 +1,6 @@
 using Kombinado.Api.Constants;
 using Kombinado.Api.Data;
+using Kombinado.Api.Extensions;
 using Kombinado.Api.Models;
 using Kombinado.Api.Models.DTOs.Requests;
 using Kombinado.Api.Models.DTOs.Responses;
@@ -118,6 +119,8 @@ public class RideService : IRideService
 
     public async Task<ApiResponse<IEnumerable<RideResponseDto>>> GetAvailableRidesAsync(Guid currentUserId)
     {
+        await _dbContext.CompleteExpiredRidesAsync();
+
         List<RideEntity> availableRides = await _dbContext.Rides
             .Include(r => r.Driver)
             .Where(r => r.Status == RideStatus.Open &&
@@ -150,6 +153,8 @@ public class RideService : IRideService
 
     public async Task<ApiResponse<IEnumerable<RideResponseDto>>> GetMyDrivingRidesAsync(Guid driverId)
     {
+        await _dbContext.CompleteExpiredRidesAsync();
+
         List<RideEntity> rides = await _dbContext.Rides
             .Include(r => r.Driver)
             .Include(r => r.Requests)
