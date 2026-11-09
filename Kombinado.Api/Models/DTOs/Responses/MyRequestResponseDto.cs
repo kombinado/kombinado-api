@@ -13,7 +13,8 @@ public class MyRequestResponseDto
     public string Origin { get; set; } = string.Empty;
     public string Destination { get; set; } = string.Empty;
     public DateTime DepartureTime { get; set; }
-    
+    public string RideStatus { get; set; } = string.Empty;
+
     // Vehicle details
     public string? VehicleModel { get; set; }
     public string? VehicleColor { get; set; }

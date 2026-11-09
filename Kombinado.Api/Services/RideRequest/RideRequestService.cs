@@ -161,6 +161,7 @@ public class RideRequestService : IRideRequestService
                 Origin = ride.Origin,
                 Destination = ride.Destination,
                 DepartureTime = ride.DepartureTime,
+                RideStatus = ride.Status,
                 VehicleModel = driver.VehicleModel,
                 VehicleColor = driver.VehicleColor,
                 VehiclePlate = driver.VehiclePlate
