@@ -42,11 +42,14 @@ The platform defines two major user roles based on their registration profile:
 ### Key Workflows:
 1. **Academic Onboarding**: Sign up using standard details. Users who intend to drive must register their vehicle model, color, license plate and how many passenger seats it has (1–8). E-mails are case-insensitive: they are stored trimmed and in lowercase, so `Alex@...` and `alex@...` are the same account.
 2. **Ride Creation**: Drivers register a ride with different origin and destination, a **future** departure time and 1 to 8 seats, never more than their vehicle's seat count. The system initializes the ride status to **Open ("Aberta")**. See [Departure time rules](#departure-time-rules).
+   - **Overlapping rides**: two rides overlap when their departure times are **less than 1 hour apart** (exactly 1 hour is allowed). Only **Open** or **Full** rides count. A driver cannot create a ride that overlaps another ride of theirs or a ride where they have an **accepted** seat as a passenger.
 3. **Seat Request**: Passengers browse available rides (only rides that have not departed yet) and request a seat. A request is created in **Pending ("Pendente")** status.
    - A passenger who **canceled** their request can request a seat on the same ride again.
    - A passenger whose request was **rejected** cannot request a seat on the same ride again.
+   - A passenger may have several **pending** requests for overlapping rides, but cannot request a seat if they already have an **accepted** seat or offer a ride of their own less than 1 hour apart.
 4. **Approval Cycle**: The driver views pending requests for their ride and responds. Requests can no longer be accepted once the ride has departed.
    - If accepted, the ride's available seats counter decrements. If available seats reach zero, the ride status auto-advances to **Full ("Lotada")**.
+   - Before accepting, the API checks the overlap rules again for the passenger (they may have been accepted elsewhere or created a ride in the meantime). Once accepted, the passenger's other **pending** requests for overlapping rides are transitioned to **Canceled ("Cancelada")**; they can request those rides again if they cancel the accepted seat.
    - If rejected, the request status is updated to **Rejected ("Recusada")**, and the passenger is notified via the API status.
 5. **Ride & Request Cancellation**: 
    - If a driver cancels a ride, all accepted/pending requests are automatically transitioned to **Canceled ("Cancelada")**.
@@ -368,6 +371,10 @@ These endpoints manage ride postings and require `Authorization: Bearer <token>`
   - `"O horário de partida deve ser uma data futura."` when the departure time is not in the future.
   - `"A carona deve oferecer entre 1 e 8 vagas."` when `totalSeats` is out of range.
   - `"A carona não pode oferecer mais vagas do que o seu veículo possui (4)."` when `totalSeats` is greater than the driver's `vehicleTotalSeats` (drivers registered before this field existed are only limited to 8).
+  - `"Você já oferece uma carona com saída em 17/12 às 18:30. Suas caronas precisam ter pelo menos 1 hora de diferença."` when the driver has another **Open** or **Full** ride less than 1 hour apart.
+  - `"Você tem vaga aceita em uma carona com saída em 17/12 às 18:30. Suas caronas precisam ter pelo menos 1 hora de diferença."` when the driver has an **accepted** seat as a passenger in a ride less than 1 hour apart.
+
+  The time in these messages is the conflicting ride's departure in Brasília time.
 
   `404` — `"Motorista não encontrado."` when the authenticated user no longer exists in the database.
 * **Response (Success `201 Created`)**:
@@ -480,8 +487,10 @@ Allows a passenger to request a seat on a ride.
   | Passenger has a **pending** or **accepted** request for this ride | `"Você já solicitou uma vaga para esta carona."` |
   | Passenger's request for this ride was **rejected** | `"Sua solicitação para esta carona foi recusada pelo motorista."` |
   | `meetingPointSuggestion` longer than 250 characters | `"A sugestão de ponto de encontro deve ter no máximo 250 caracteres."` |
+  | Passenger has an **accepted** seat in a ride less than 1 hour apart | `"Você já tem vaga aceita em uma carona com saída em 17/12 às 18:30, a menos de 1 hora desta."` |
+  | Passenger offers an **Open** or **Full** ride less than 1 hour apart | `"Você oferece uma carona com saída em 17/12 às 18:30, a menos de 1 hora desta."` |
 
-  A previously **canceled** request does not block a new one. `meetingPointSuggestion` is optional: it is trimmed, and a blank value is stored as `null`.
+  A previously **canceled** request does not block a new one. **Pending** requests for overlapping rides are allowed. `meetingPointSuggestion` is optional: it is trimmed, and a blank value is stored as `null`.
 * **Response (Success `200 OK`)**:
   ```json
   {
@@ -563,7 +572,13 @@ Allows a driver to accept or decline a passenger's seat booking request.
   }
   ```
   *(Status transitions to `"Aceita"` if accepted, or `"Recusada"` if `accept` is false).*
-* **Errors**: `400` — `"Não é possível aceitar esta solicitação, pois a carona já partiu."` when accepting a request after the ride's departure time. Rejecting is still allowed.
+  When a request is accepted, the passenger's other **pending** requests for rides less than 1 hour apart become `"Cancelada"`.
+* **Errors** when accepting (`400`); rejecting has none of these checks:
+  - `"Não é possível aceitar esta solicitação, pois a carona já partiu."` after the ride's departure time.
+  - `"Este passageiro já tem vaga aceita em outra carona em horário próximo (menos de 1 hora de diferença)."`
+  - `"Este passageiro oferece uma carona em horário próximo (menos de 1 hora de diferença)."`
+
+  These messages do not show the passenger's other ride, to keep their schedule private.
 
 ---
 
@@ -657,11 +672,14 @@ O sistema reconhece dois perfis de usuários devidamente autenticados:
 ### Ciclo Operacional:
 1. **Cadastro Completo**: Criação da conta com curso acadêmico e contato telefônico. Perfis de motoristas incluem modelo, cor e placa do veículo e quantas vagas ele tem para passageiros (de 1 a 8). O e-mail não diferencia maiúsculas de minúsculas: ele é salvo sem espaços e em minúsculas, então `Maria@...` e `maria@...` são a mesma conta.
 2. **Postagem de Carona**: Um motorista cria uma carona com origem e destino diferentes, horário de partida **no futuro** e de 1 a 8 vagas, sem passar do número de vagas do seu veículo. O sistema cria a viagem sob o estado **Aberta**. Veja as [regras do horário de partida](#pt-regras-horario).
+   - **Caronas sobrepostas**: duas caronas se sobrepõem quando os horários de partida estão a **menos de 1 hora** um do outro (exatamente 1 hora é permitido). Só contam caronas **Abertas** ou **Lotadas**. O motorista não pode criar uma carona sobreposta a outra carona dele nem a uma carona em que tem vaga **aceita** como passageiro.
 3. **Solicitação de Assento**: Um passageiro localiza a carona (apenas caronas que ainda não partiram aparecem) e submete uma solicitação de reserva informando sugestões de embarque. O pedido entra em status **Pendente**.
    - Quem **cancelou** a própria solicitação pode solicitar vaga novamente na mesma carona.
    - Quem teve a solicitação **recusada** não pode solicitar vaga novamente na mesma carona.
+   - O passageiro pode ter várias solicitações **pendentes** em caronas sobrepostas, mas não pode pedir vaga se já tiver uma vaga **aceita** ou oferecer uma carona própria a menos de 1 hora.
 4. **Avaliação do Motorista**: O motorista analisa a solicitação pendente através da API (não é possível aceitar solicitações depois que a carona partiu):
    - Se **Aceitar**, a vaga é reservada e o número de assentos disponíveis da carona diminui. Caso as vagas cheguem a zero, o status da carona muda para **Lotada**.
+   - Antes de aceitar, a API confere de novo as regras de sobreposição para o passageiro (ele pode ter sido aceito em outra carona ou criado uma carona nesse meio-tempo). Depois do aceite, as outras solicitações **pendentes** do passageiro em caronas sobrepostas passam para **Cancelada**; ele pode pedir vaga nelas de novo se cancelar a vaga aceita.
    - Se **Recusar**, o status da solicitação atualiza para **Recusada**, permitindo ao passageiro buscar outras opções.
 5. **Políticas de Cancelamento**:
    - Se o motorista cancelar a carona, todos os passageiros vinculados têm suas solicitações marcadas automaticamente como **Cancelada**.
@@ -983,6 +1001,10 @@ O `RideResponseDto` inclui `driverName` (string): o nome do motorista no cadastr
   - `"O horário de partida deve ser uma data futura."` quando o horário de partida não está no futuro.
   - `"A carona deve oferecer entre 1 e 8 vagas."` quando `totalSeats` está fora do intervalo.
   - `"A carona não pode oferecer mais vagas do que o seu veículo possui (4)."` quando `totalSeats` é maior que o `vehicleTotalSeats` do motorista (motoristas cadastrados antes de esse campo existir ficam limitados apenas a 8).
+  - `"Você já oferece uma carona com saída em 17/12 às 18:30. Suas caronas precisam ter pelo menos 1 hora de diferença."` quando o motorista tem outra carona **Aberta** ou **Lotada** a menos de 1 hora.
+  - `"Você tem vaga aceita em uma carona com saída em 17/12 às 18:30. Suas caronas precisam ter pelo menos 1 hora de diferença."` quando o motorista tem vaga **aceita** como passageiro em uma carona a menos de 1 hora.
+
+  O horário dessas mensagens é a partida da carona que conflita, no horário de Brasília.
 
   `404` — `"Motorista não encontrado."` quando o usuário autenticado não existe mais no banco.
 * **Resposta de Sucesso (`201 Created`)**:
@@ -1095,8 +1117,10 @@ Cria um pedido pendente de assento na carona informada.
   | Passageiro já tem solicitação **pendente** ou **aceita** nesta carona | `"Você já solicitou uma vaga para esta carona."` |
   | Solicitação do passageiro nesta carona foi **recusada** | `"Sua solicitação para esta carona foi recusada pelo motorista."` |
   | `meetingPointSuggestion` com mais de 250 caracteres | `"A sugestão de ponto de encontro deve ter no máximo 250 caracteres."` |
+  | Passageiro tem vaga **aceita** em uma carona a menos de 1 hora | `"Você já tem vaga aceita em uma carona com saída em 17/12 às 18:30, a menos de 1 hora desta."` |
+  | Passageiro oferece uma carona **Aberta** ou **Lotada** a menos de 1 hora | `"Você oferece uma carona com saída em 17/12 às 18:30, a menos de 1 hora desta."` |
 
-  Uma solicitação **cancelada** anteriormente não impede um novo pedido. O `meetingPointSuggestion` é opcional: fica sem espaços nas pontas, e um valor em branco é salvo como `null`.
+  Uma solicitação **cancelada** anteriormente não impede um novo pedido. Solicitações **pendentes** em caronas sobrepostas são permitidas. O `meetingPointSuggestion` é opcional: fica sem espaços nas pontas, e um valor em branco é salvo como `null`.
 * **Resposta de Sucesso (`200 OK`)**:
   ```json
   {
@@ -1178,7 +1202,13 @@ Deferimento (Aceite ou Recusa) de reservas sob a ótica do motorista.
   }
   ```
   *(Status transita para `"Aceita"` ou `"Recusada"`, conforme o campo `accept`).*
-* **Erros**: `400` — `"Não é possível aceitar esta solicitação, pois a carona já partiu."` ao tentar aceitar depois do horário de partida. Recusar continua permitido.
+  Quando uma solicitação é aceita, as outras solicitações **pendentes** do passageiro em caronas a menos de 1 hora passam para `"Cancelada"`.
+* **Erros** ao aceitar (`400`); recusar não passa por essas checagens:
+  - `"Não é possível aceitar esta solicitação, pois a carona já partiu."` depois do horário de partida.
+  - `"Este passageiro já tem vaga aceita em outra carona em horário próximo (menos de 1 hora de diferença)."`
+  - `"Este passageiro oferece uma carona em horário próximo (menos de 1 hora de diferença)."`
+
+  Essas mensagens não mostram a outra carona do passageiro, para preservar a agenda dele.
 
 ---
 
