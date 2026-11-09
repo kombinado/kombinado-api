@@ -5,6 +5,7 @@ using Kombinado.Api.Models;
 using Kombinado.Api.Models.DTOs.Requests;
 using Kombinado.Api.Models.DTOs.Responses;
 using Kombinado.Api.Models.Entities;
+using Kombinado.Api.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kombinado.Api.Services.RideRequest;
@@ -81,11 +82,30 @@ public class RideRequestService : IRideRequestService
         if (existingStatus != null)
         {
             return ApiResponse<RideRequestResponseDto>.FailureResponse(
-                "Você já solicitou uma vaga para esta carona.", 
+                "Você já solicitou uma vaga para esta carona.",
                 400
             );
         }
-        
+
+        // Pending requests may overlap; accepted seats and own rides may not
+        DateTime? overlappingSeat = await _dbContext.FindOverlappingAcceptedSeatAsync(passengerId, ride.DepartureTime);
+        if (overlappingSeat != null)
+        {
+            return ApiResponse<RideRequestResponseDto>.FailureResponse(
+                $"Você já tem vaga aceita em uma carona com saída em {DateTimeUtils.ToBrasiliaDisplay(overlappingSeat.Value)}, a menos de 1 hora desta.",
+                400
+            );
+        }
+
+        DateTime? overlappingRide = await _dbContext.FindOverlappingOfferedRideAsync(passengerId, ride.DepartureTime);
+        if (overlappingRide != null)
+        {
+            return ApiResponse<RideRequestResponseDto>.FailureResponse(
+                $"Você oferece uma carona com saída em {DateTimeUtils.ToBrasiliaDisplay(overlappingRide.Value)}, a menos de 1 hora desta.",
+                400
+            );
+        }
+
         RideRequestEntity newRequest = new RideRequestEntity
         {
             Id = Guid.NewGuid(),
