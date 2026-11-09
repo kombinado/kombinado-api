@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Kombinado.Api.Utils
 {
     public static class DateTimeUtils
@@ -18,6 +20,13 @@ namespace Kombinado.Api.Utils
                 DateTimeKind.Local => value.ToUniversalTime(), // JSON with offset (e.g. "-03:00")
                 _ => TimeZoneInfo.ConvertTimeToUtc(value, BrasiliaTimeZone) // JSON without offset
             };
+        }
+
+        // Formats a UTC date for API messages, e.g. "17/12 às 18:30"
+        public static string ToBrasiliaDisplay(DateTime utc)
+        {
+            DateTime brasilia = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), BrasiliaTimeZone);
+            return brasilia.ToString("dd/MM 'às' HH:mm", CultureInfo.InvariantCulture);
         }
     }
 }
