@@ -61,6 +61,20 @@ namespace Kombinado.Api.Controllers
             return Ok(response);
         }
         
+        [HttpGet("history")]
+        public async Task<IActionResult> GetRideHistory()
+        {
+            Guid userId = User.GetUserId();
+
+            var response = await _rideService.GetRideHistoryAsync(userId);
+            if (!response.Success)
+            {
+                return StatusCode(response.StatusCode, response);
+            }
+
+            return Ok(response);
+        }
+
         [HttpPatch("{rideId}/cancel")]
         [Authorize("DriverOnly")]
         public async Task<IActionResult> CancelRide(Guid rideId)

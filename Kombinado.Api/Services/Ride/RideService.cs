@@ -272,4 +272,59 @@ public class RideService : IRideService
 
         return ApiResponse<string>.SuccessResponse("Carona encerrada com sucesso.", null);
     }
+
+    public async Task<ApiResponse<IEnumerable<RideHistoryResponseDto>>> GetRideHistoryAsync(Guid userId)
+    {
+        await _dbContext.CompleteExpiredRidesAsync();
+
+        List<RideHistoryResponseDto> asDriver = await _dbContext.Rides
+            .Where(r => r.DriverId == userId &&
+                        (r.Status == RideStatus.Completed || r.Status == RideStatus.Canceled))
+            .Select(r => new RideHistoryResponseDto
+            {
+                Id = r.Id,
+                Role = RideHistoryRole.Driver,
+                DriverName = r.Driver.Name,
+                Origin = r.Origin,
+                Destination = r.Destination,
+                DepartureTime = r.DepartureTime,
+                Status = r.Status,
+                PassengersCount = r.Requests.Count(rr => rr.Status == RideRequestStatus.Accepted),
+                VehicleModel = r.Driver.VehicleModel,
+                VehicleColor = r.Driver.VehicleColor,
+                VehiclePlate = r.Driver.VehiclePlate
+            })
+            .ToListAsync();
+
+        // Only accepted seats count as trips; pending and canceled requests are left out
+        List<RideHistoryResponseDto> asPassenger = await _dbContext.RideRequests
+            .Where(rr => rr.PassengerId == userId &&
+                         rr.Status == RideRequestStatus.Accepted &&
+                         (rr.Ride.Status == RideStatus.Completed || rr.Ride.Status == RideStatus.Canceled))
+            .Select(rr => new RideHistoryResponseDto
+            {
+                Id = rr.Ride.Id,
+                Role = RideHistoryRole.Passenger,
+                DriverName = rr.Ride.Driver.Name,
+                Origin = rr.Ride.Origin,
+                Destination = rr.Ride.Destination,
+                DepartureTime = rr.Ride.DepartureTime,
+                Status = rr.Ride.Status,
+                PassengersCount = rr.Ride.Requests.Count(other => other.Status == RideRequestStatus.Accepted),
+                VehicleModel = rr.Ride.Driver.VehicleModel,
+                VehicleColor = rr.Ride.Driver.VehicleColor,
+                VehiclePlate = rr.Ride.Driver.VehiclePlate
+            })
+            .ToListAsync();
+
+        List<RideHistoryResponseDto> history = asDriver
+            .Concat(asPassenger)
+            .OrderByDescending(h => h.DepartureTime)
+            .ToList();
+
+        return ApiResponse<IEnumerable<RideHistoryResponseDto>>.SuccessResponse(
+            "Histórico de viagens recuperado com sucesso.",
+            history
+        );
+    }
 }
