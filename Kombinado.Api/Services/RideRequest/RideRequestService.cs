@@ -1,5 +1,6 @@
 using Kombinado.Api.Constants;
 using Kombinado.Api.Data;
+using Kombinado.Api.Extensions;
 using Kombinado.Api.Models;
 using Kombinado.Api.Models.DTOs.Requests;
 using Kombinado.Api.Models.DTOs.Responses;
@@ -120,6 +121,8 @@ public class RideRequestService : IRideRequestService
 
     public async Task<ApiResponse<IEnumerable<MyRequestResponseDto>>> GetMyRequestsAsync(Guid passengerId)
     {
+        await _dbContext.CompleteExpiredRidesAsync();
+
         List<MyRequestResponseDto> responseList = await (
             from request in _dbContext.RideRequests
             where request.PassengerId == passengerId && request.Status != RideRequestStatus.Cancelled     
@@ -192,6 +195,8 @@ public class RideRequestService : IRideRequestService
 
     public async Task<ApiResponse<IEnumerable<RideRequestResponseDto>>> GetRequestsByRideAsync(Guid rideId, Guid driverId)
     {
+        await _dbContext.CompleteExpiredRidesAsync();
+
         List<RideRequestResponseDto> responseList = await (
             from request in _dbContext.RideRequests
             join ride in _dbContext.Rides on request.RideId equals ride.Id

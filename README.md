@@ -50,8 +50,13 @@ The platform defines two major user roles based on their registration profile:
    - If rejected, the request status is updated to **Rejected ("Recusada")**, and the passenger is notified via the API status.
 5. **Ride & Request Cancellation**: 
    - If a driver cancels a ride, all accepted/pending requests are automatically transitioned to **Canceled ("Cancelada")**.
+   - Only **Open** or **Full** rides can be canceled.
    - Passengers can cancel their seat requests, returning the seat back to the pool if already accepted. However, **accepted requests cannot be canceled if the ride's departure time is within 15 minutes**.
-6. **Profile Management**: Users can update their name, WhatsApp and course; drivers can also update their vehicle data. E-mail and role (driver/passenger) cannot be changed.
+6. **Ride Completion**: A ride becomes **Completed ("Concluída")** in two ways:
+   - **By the driver**: only **after the departure time**, and only for **Open** or **Full** rides.
+   - **Automatically**: **3 hours after the departure time**, if the driver did not complete it. This is applied whenever the API lists rides or requests (no background job).
+   - Accepted requests stay **Accepted ("Aceita")**; requests still **Pending** are transitioned to **Canceled ("Cancelada")**.
+7. **Profile Management**: Users can update their name, WhatsApp and course; drivers can also update their vehicle data. E-mail and role (driver/passenger) cannot be changed.
 
 ---
 
@@ -107,7 +112,7 @@ erDiagram
 #### 🚗 Ride Status (`RideStatus`)
 * **Open ("Aberta")**: Ride has available seats and is visible to passengers.
 * **Full ("Lotada")**: Ride has filled all available seats.
-* **Completed ("Concluída")**: The trip has finished successfully.
+* **Completed ("Concluída")**: The trip has finished: completed by the driver after departure, or automatically 3 hours after departure.
 * **Canceled ("Cancelada")**: The driver canceled the trip.
 
 #### 📩 Ride Request Status (`RideRequestStatus`)
@@ -429,6 +434,27 @@ Cancels a specific ride and sets its status to `"Cancelada"`.
     "statusCode": 200
   }
   ```
+* **Errors**: `400` — `"Apenas caronas abertas ou lotadas podem ser canceladas."` when the ride is already completed or canceled.
+
+#### Complete a Ride (`PATCH /api/Rides/{rideId}/complete`)
+*🔒 **Requires Driver Role (`DriverOnly` Policy)***
+Completes a ride after its departure time and sets its status to `"Concluída"`. Accepted requests are kept as `"Aceita"`; pending requests become `"Cancelada"`. Rides not completed by the driver are completed automatically 3 hours after departure.
+* **Business rules / Errors** (`400` unless noted):
+  | Situation | Message |
+  |---|---|
+  | Ride not found (`404`) | `"Carona não encontrada."` |
+  | Ride belongs to another driver (`403`) | `"Você não tem permissão para encerrar esta carona."` |
+  | Ride is not **Open** or **Full** (already completed or canceled) | `"Apenas caronas abertas ou lotadas podem ser encerradas."` |
+  | Departure time has not been reached yet | `"A carona só pode ser encerrada depois do horário de saída."` |
+* **Response (Success `200 OK`)**:
+  ```json
+  {
+    "success": true,
+    "message": "Carona encerrada com sucesso.",
+    "data": null,
+    "statusCode": 200
+  }
+  ```
 
 ---
 
@@ -639,8 +665,13 @@ O sistema reconhece dois perfis de usuários devidamente autenticados:
    - Se **Recusar**, o status da solicitação atualiza para **Recusada**, permitindo ao passageiro buscar outras opções.
 5. **Políticas de Cancelamento**:
    - Se o motorista cancelar a carona, todos os passageiros vinculados têm suas solicitações marcadas automaticamente como **Cancelada**.
+   - Só caronas **Abertas** ou **Lotadas** podem ser canceladas.
    - O passageiro pode remover sua própria reserva, devolvendo a vaga para a carona caso já tenha sido aceita. No entanto, **solicitações aceitas não podem ser canceladas se faltarem menos de 15 minutos para o horário de partida**.
-6. **Gestão do Perfil**: O usuário pode atualizar nome, WhatsApp e curso; motoristas também podem atualizar os dados do veículo. E-mail e perfil (motorista/passageiro) não podem ser alterados.
+6. **Encerramento da Carona**: Uma carona passa a ser **Concluída** de duas formas:
+   - **Pelo motorista**: só **depois do horário de partida**, e só para caronas **Abertas** ou **Lotadas**.
+   - **Automaticamente**: **3 horas depois do horário de partida**, se o motorista não encerrar. A regra é aplicada sempre que a API lista caronas ou solicitações (sem tarefa em segundo plano).
+   - Solicitações **Aceitas** continuam **Aceita**; as que ainda estavam **Pendentes** passam para **Cancelada**.
+7. **Gestão do Perfil**: O usuário pode atualizar nome, WhatsApp e curso; motoristas também podem atualizar os dados do veículo. E-mail e perfil (motorista/passageiro) não podem ser alterados.
 
 ---
 
@@ -696,7 +727,7 @@ erDiagram
 #### Status da Carona (`RideStatus`)
 * **Aberta**: Possui assentos disponíveis e pode ser solicitada por passageiros.
 * **Lotada**: Atingiu o limite máximo de assentos ocupados.
-* **Concluída**: Viagem finalizada no destino.
+* **Concluída**: Viagem finalizada: encerrada pelo motorista depois da partida ou automaticamente 3 horas após a partida.
 * **Cancelada**: Viagem descontinuada pelo motorista.
 
 #### Status da Solicitação (`RideRequestStatus`)
@@ -1014,6 +1045,27 @@ Invalida o trajeto e desmarca as vagas preenchidas, definindo o status como `"Ca
   {
     "success": true,
     "message": "Carona cancelada com sucesso.",
+    "data": null,
+    "statusCode": 200
+  }
+  ```
+* **Erros**: `400` — `"Apenas caronas abertas ou lotadas podem ser canceladas."` quando a carona já foi concluída ou cancelada.
+
+#### Encerrar uma Carona (`PATCH /api/Rides/{rideId}/complete`)
+*🔒 **Apenas Motoristas (`DriverOnly` Policy)***
+Encerra a carona depois do horário de partida, definindo o status como `"Concluída"`. Solicitações aceitas continuam `"Aceita"`; as pendentes passam para `"Cancelada"`. Caronas que o motorista não encerrar são concluídas automaticamente 3 horas após a partida.
+* **Regras de negócio / Erros** (`400`, salvo indicação):
+  | Situação | Mensagem |
+  |---|---|
+  | Carona inexistente (`404`) | `"Carona não encontrada."` |
+  | Carona de outro motorista (`403`) | `"Você não tem permissão para encerrar esta carona."` |
+  | Carona não está **Aberta** nem **Lotada** (já concluída ou cancelada) | `"Apenas caronas abertas ou lotadas podem ser encerradas."` |
+  | Horário de partida ainda não chegou | `"A carona só pode ser encerrada depois do horário de saída."` |
+* **Resposta de Sucesso (`200 OK`)**:
+  ```json
+  {
+    "success": true,
+    "message": "Carona encerrada com sucesso.",
     "data": null,
     "statusCode": 200
   }

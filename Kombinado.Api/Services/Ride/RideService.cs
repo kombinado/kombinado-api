@@ -1,5 +1,6 @@
 using Kombinado.Api.Constants;
 using Kombinado.Api.Data;
+using Kombinado.Api.Extensions;
 using Kombinado.Api.Models;
 using Kombinado.Api.Models.DTOs.Requests;
 using Kombinado.Api.Models.DTOs.Responses;
@@ -118,6 +119,8 @@ public class RideService : IRideService
 
     public async Task<ApiResponse<IEnumerable<RideResponseDto>>> GetAvailableRidesAsync(Guid currentUserId)
     {
+        await _dbContext.CompleteExpiredRidesAsync();
+
         List<RideEntity> availableRides = await _dbContext.Rides
             .Include(r => r.Driver)
             .Where(r => r.Status == RideStatus.Open &&
@@ -150,6 +153,8 @@ public class RideService : IRideService
 
     public async Task<ApiResponse<IEnumerable<RideResponseDto>>> GetMyDrivingRidesAsync(Guid driverId)
     {
+        await _dbContext.CompleteExpiredRidesAsync();
+
         List<RideEntity> rides = await _dbContext.Rides
             .Include(r => r.Driver)
             .Include(r => r.Requests)
@@ -190,7 +195,12 @@ public class RideService : IRideService
         {
             return ApiResponse<string>.FailureResponse("Você não tem permissão para cancelar esta carona.", 403);
         }
-        
+
+        if (ride.Status != RideStatus.Open && ride.Status != RideStatus.Full)
+        {
+            return ApiResponse<string>.FailureResponse("Apenas caronas abertas ou lotadas podem ser canceladas.", 400);
+        }
+
         // Soft delete
         ride.Status = RideStatus.Canceled;
 
@@ -209,5 +219,44 @@ public class RideService : IRideService
         await _dbContext.SaveChangesAsync();
         
         return ApiResponse<string>.SuccessResponse("Carona cancelada com sucesso.", null);
+    }
+
+    public async Task<ApiResponse<string>> CompleteRideAsync(Guid rideId, Guid driverId)
+    {
+        RideEntity? ride = await _dbContext.Rides
+            .Include(r => r.Requests)
+            .FirstOrDefaultAsync(r => r.Id == rideId);
+
+        if (ride == null)
+        {
+            return ApiResponse<string>.FailureResponse("Carona não encontrada.", 404);
+        }
+
+        if (ride.DriverId != driverId)
+        {
+            return ApiResponse<string>.FailureResponse("Você não tem permissão para encerrar esta carona.", 403);
+        }
+
+        if (ride.Status != RideStatus.Open && ride.Status != RideStatus.Full)
+        {
+            return ApiResponse<string>.FailureResponse("Apenas caronas abertas ou lotadas podem ser encerradas.", 400);
+        }
+
+        if (ride.DepartureTime > DateTime.UtcNow)
+        {
+            return ApiResponse<string>.FailureResponse("A carona só pode ser encerrada depois do horário de saída.", 400);
+        }
+
+        ride.Status = RideStatus.Completed;
+
+        // Accepted requests are kept for the trip history
+        foreach (var request in ride.Requests.Where(r => r.Status == RideRequestStatus.Pending))
+        {
+            request.Status = RideRequestStatus.Cancelled;
+        }
+
+        await _dbContext.SaveChangesAsync();
+
+        return ApiResponse<string>.SuccessResponse("Carona encerrada com sucesso.", null);
     }
 }
