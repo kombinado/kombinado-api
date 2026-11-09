@@ -276,11 +276,37 @@ public class RideRequestService : IRideRequestService
                 );
             }
 
+            // The passenger may have been accepted elsewhere or created a ride since requesting
+            DateTime departureTime = request.Ride.DepartureTime;
+            if (await _dbContext.FindOverlappingAcceptedSeatAsync(request.PassengerId, departureTime) != null)
+            {
+                return ApiResponse<string>.FailureResponse(
+                    "Este passageiro já tem vaga aceita em outra carona em horário próximo (menos de 1 hora de diferença).",
+                    400
+                );
+            }
+
+            if (await _dbContext.FindOverlappingOfferedRideAsync(request.PassengerId, departureTime) != null)
+            {
+                return ApiResponse<string>.FailureResponse(
+                    "Este passageiro oferece uma carona em horário próximo (menos de 1 hora de diferença).",
+                    400
+                );
+            }
+
             request.Status = RideRequestStatus.Accepted;
             request.Ride.AvailableSeats -= 1;
             if (request.Ride.AvailableSeats == 0)
             {
                 request.Ride.Status = RideStatus.Full;
+            }
+
+            // Other pending requests in overlapping rides can no longer be accepted
+            var overlappingPending = await _dbContext.GetOverlappingPendingRequestsAsync(
+                request.PassengerId, departureTime, request.Id);
+            foreach (var pending in overlappingPending)
+            {
+                pending.Status = RideRequestStatus.Cancelled;
             }
         }
         else
