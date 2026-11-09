@@ -54,7 +54,26 @@ public class RideService : IRideService
             );
         }
 
-        // 3. Create a ride
+        // 3. Block rides overlapping the driver's own rides or accepted seats
+        DateTime? overlappingRide = await _dbContext.FindOverlappingOfferedRideAsync(driverId, departureTimeUtc);
+        if (overlappingRide != null)
+        {
+            return ApiResponse<RideResponseDto>.FailureResponse(
+                $"Você já oferece uma carona com saída em {DateTimeUtils.ToBrasiliaDisplay(overlappingRide.Value)}. Suas caronas precisam ter pelo menos 1 hora de diferença.",
+                400
+            );
+        }
+
+        DateTime? overlappingSeat = await _dbContext.FindOverlappingAcceptedSeatAsync(driverId, departureTimeUtc);
+        if (overlappingSeat != null)
+        {
+            return ApiResponse<RideResponseDto>.FailureResponse(
+                $"Você tem vaga aceita em uma carona com saída em {DateTimeUtils.ToBrasiliaDisplay(overlappingSeat.Value)}. Suas caronas precisam ter pelo menos 1 hora de diferença.",
+                400
+            );
+        }
+
+        // 4. Create a ride
         RideEntity newRide = new RideEntity
         {
             Id = Guid.NewGuid(),
@@ -67,11 +86,11 @@ public class RideService : IRideService
             Status = RideStatus.Open
         };
         
-        // 4. Save the ride in DB
+        // 5. Save the ride in DB
         _dbContext.Rides.Add(newRide);
         await _dbContext.SaveChangesAsync();
         
-        // 5. Return the Ride response
+        // 6. Return the Ride response
         RideResponseDto responseDto = new RideResponseDto
         {
             Id = newRide.Id,
